@@ -1,5 +1,4 @@
-
-        }<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1690,7 +1689,7 @@
             } else if (currentGame.stage === 'showdown') {
                 // Show who won during showdown
                 if (currentGame.lastWinner) {
-                    statusEl.innerHTML = `<strong style="color: #f39c12;">${currentGame.lastWinner.name} wins ${currentGame.lastWinner.amount} chips with ${currentGame.lastWinner.hand}!</strong><br><small style="color: #ecf0f1;">New hand starting in 3 seconds...</small>`;
+                    statusEl.innerHTML = `<strong style="color: #f39c12;">${currentGame.lastWinner.name} wins ${currentGame.lastWinner.amount} chips with ${currentGame.lastWinner.hand}!</strong>`;
                 } else {
                     statusEl.textContent = 'Showdown!';
                 }
@@ -2093,49 +2092,36 @@
                 // Then show the winner popup
                 showFinalWinner(winner, bankruptPlayer);
             } else {
-                // No one bankrupt - show a brief winner message then continue to next hand
+                // No one bankrupt - immediately start new hand
                 console.log('Hand complete - Winner:', gameData.lastWinner.name, 'won', gameData.lastWinner.amount);
                 
-                // Update to showdown state first to display the winner
+                // Reset the game state for new hand
+                resetGame(gameData);
+                
+                console.log('After resetGame and dealCards for new hand:');
+                console.log('Player 0:', gameData.players[0].name, 'Chips:', gameData.players[0].chips, 'Bet:', gameData.players[0].bet);
+                console.log('Player 1:', gameData.players[1].name, 'Chips:', gameData.players[1].chips, 'Bet:', gameData.players[1].bet);
+                console.log('Pot:', gameData.pot, 'Current Bet:', gameData.currentBet);
+                console.log('Stage:', gameData.stage, 'Current Player:', gameData.currentPlayer);
+                
+                // Update Firestore with the new game state including pot with blinds
                 const gameRef = db.collection('games').doc(currentGame.id);
                 await gameRef.update({
                     players: gameData.players,
-                    stage: 'showdown',
-                    lastWinner: gameData.lastWinner,
-                    pot: gameData.pot
+                    deck: gameData.deck,
+                    communityCards: gameData.communityCards,
+                    pot: gameData.pot,
+                    currentBet: gameData.currentBet,
+                    currentPlayer: gameData.currentPlayer,
+                    stage: gameData.stage,
+                    playersActed: gameData.playersActed,
+                    handCount: gameData.handCount,
+                    smallBlind: gameData.smallBlind,
+                    bigBlind: gameData.bigBlind,
+                    lastWinner: gameData.lastWinner
                 });
                 
-                // Wait 3 seconds then start new hand
-                setTimeout(async () => {
-                    console.log('Starting new hand after 3 second delay...');
-                    
-                    // Reset the game state for new hand
-                    resetGame(gameData);
-                    
-                    console.log('After resetGame and dealCards for new hand:');
-                    console.log('Player 0:', gameData.players[0].name, 'Chips:', gameData.players[0].chips, 'Bet:', gameData.players[0].bet);
-                    console.log('Player 1:', gameData.players[1].name, 'Chips:', gameData.players[1].chips, 'Bet:', gameData.players[1].bet);
-                    console.log('Pot:', gameData.pot, 'Current Bet:', gameData.currentBet);
-                    console.log('Stage:', gameData.stage, 'Current Player:', gameData.currentPlayer);
-                    
-                    // Update Firestore with the new game state including pot with blinds
-                    await gameRef.update({
-                        players: gameData.players,
-                        deck: gameData.deck,
-                        communityCards: gameData.communityCards,
-                        pot: gameData.pot,
-                        currentBet: gameData.currentBet,
-                        currentPlayer: gameData.currentPlayer,
-                        stage: gameData.stage,
-                        playersActed: gameData.playersActed,
-                        handCount: gameData.handCount,
-                        smallBlind: gameData.smallBlind,
-                        bigBlind: gameData.bigBlind,
-                        lastWinner: gameData.lastWinner
-                    });
-                    
-                    console.log('Firestore updated with new hand data');
-                }, 3000); // 3 second delay to see the showdown
+                console.log('Firestore updated with new hand data');
             }
         }
         
