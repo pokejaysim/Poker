@@ -1,4 +1,10 @@
-        <!DOCTYPE html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Texas Hold'em Poker - Live Multiplayer</title>
+    <style>        <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -413,6 +419,28 @@
             color: rgba(255, 255, 255, 0.7);
         }
 
+        .login-container .divider {
+            display: flex;
+            align-items: center;
+            margin: 30px 0;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-container .divider::before,
+        .login-container .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .login-container .divider span {
+            padding: 0 20px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.9rem;
+        }
+
         .google-signin-btn {
             display: flex;
             align-items: center;
@@ -462,6 +490,11 @@
         .user-name {
             font-weight: 600;
             color: #f39c12;
+        }
+
+        .user-name.guest {
+            font-style: italic;
+            opacity: 0.9;
         }
 
         .sign-out-btn {
@@ -516,11 +549,15 @@
                 </svg>
                 Sign in with Google
             </button>
+            <div class="divider"><span>or</span></div>
+            <button class="btn btn-secondary" onclick="signInAnonymously()">
+                Play as Guest
+            </button>
         </div>
 
         <div class="lobby" id="lobby" style="display: none;">
             <div class="user-info" id="userInfo">
-                <img class="user-avatar" id="userAvatar" src="" alt="Avatar">
+                <img class="user-avatar" id="userAvatar" src="" alt="Avatar" onerror="this.src='https://www.gravatar.com/avatar/?d=mp&s=200'">
                 <span class="user-name" id="userName"></span>
                 <button class="sign-out-btn" onclick="signOut()">Sign Out</button>
             </div>
@@ -539,7 +576,7 @@
 
         <div class="game-table" id="gameTable" style="display: none;">
             <div class="user-info" style="position: relative; margin-bottom: 20px;">
-                <img class="user-avatar" id="gameUserAvatar" src="" alt="Avatar">
+                <img class="user-avatar" id="gameUserAvatar" src="" alt="Avatar" onerror="this.src='https://www.gravatar.com/avatar/?d=mp&s=200'">
                 <span class="user-name" id="gameUserName"></span>
                 <button class="sign-out-btn" onclick="leaveGame()">Leave Game</button>
             </div>
@@ -610,12 +647,22 @@
             if (user) {
                 // User is signed in
                 playerId = user.uid;
-                playerName = user.displayName;
-                playerPhotoURL = user.photoURL;
+                
+                // Handle anonymous users
+                if (user.isAnonymous) {
+                    const guestNames = ['Ace', 'King', 'Queen', 'Jack', 'Royal', 'Flush', 'Bluff', 'Shark', 'Pro'];
+                    const randomName = guestNames[Math.floor(Math.random() * guestNames.length)];
+                    playerName = randomName + '_' + user.uid.substring(0, 4).toUpperCase();
+                    playerPhotoURL = 'https://www.gravatar.com/avatar/?d=identicon&s=200';
+                } else {
+                    playerName = user.displayName;
+                    playerPhotoURL = user.photoURL;
+                }
                 
                 document.getElementById('loginScreen').style.display = 'none';
                 document.getElementById('lobby').style.display = 'flex';
                 document.getElementById('userName').textContent = playerName;
+                document.getElementById('userName').className = 'user-name' + (user.isAnonymous ? ' guest' : '');
                 document.getElementById('userAvatar').src = playerPhotoURL;
             } else {
                 // User is signed out
@@ -639,6 +686,16 @@
             } catch (error) {
                 console.error('Error signing in:', error);
                 alert('Error signing in. Please try again.');
+            }
+        }
+
+        // Sign in anonymously
+        async function signInAnonymously() {
+            try {
+                await auth.signInAnonymously();
+            } catch (error) {
+                console.error('Error signing in anonymously:', error);
+                alert('Error signing in as guest. Please try again.');
             }
         }
 
@@ -817,6 +874,7 @@
             document.getElementById('gameTable').style.display = 'block';
             document.getElementById('roomCodeDisplay').textContent = `Room: ${roomCode}`;
             document.getElementById('gameUserName').textContent = playerName;
+            document.getElementById('gameUserName').className = 'user-name' + (auth.currentUser && auth.currentUser.isAnonymous ? ' guest' : '');
             document.getElementById('gameUserAvatar').src = playerPhotoURL;
         }
 
@@ -837,14 +895,6 @@
 
         function updateGameUI() {
             if (!currentGame) return;
-
-            console.log('Game state:', {
-                stage: currentGame.stage,
-                currentPlayer: currentGame.currentPlayer,
-                currentBet: currentGame.currentBet,
-                pot: currentGame.pot,
-                playersActed: currentGame.playersActed
-            });
 
             // Update players
             currentGame.players.forEach((player, index) => {
@@ -937,15 +987,6 @@
             const currentPlayer = currentGame.players[currentGame.currentPlayer];
             const isMyTurn = currentPlayer && currentPlayer.id === playerId;
             const myPlayer = currentGame.players.find(p => p.id === playerId);
-            
-            console.log('Action buttons update:', {
-                currentPlayerIndex: currentGame.currentPlayer,
-                currentPlayerId: currentPlayer?.id,
-                myPlayerId: playerId,
-                isMyTurn,
-                stage: currentGame.stage,
-                myPlayerFolded: myPlayer?.folded
-            });
             
             if (isMyTurn && currentGame.stage !== 'waiting' && currentGame.stage !== 'showdown' && !myPlayer.folded) {
                 actionButtons.style.display = 'flex';
@@ -1067,14 +1108,6 @@
                 if (action !== 'raise' && action !== 'fold' && !updates.playersActed.includes(myPlayerIndex)) {
                     updates.playersActed.push(myPlayerIndex);
                 }
-
-                console.log('After action:', {
-                    action,
-                    playerIndex: myPlayerIndex,
-                    playersActed: updates.playersActed,
-                    currentBet: updates.currentBet,
-                    shouldAdvance: shouldAdvanceStage(updates)
-                });
 
                 // Check if we need to advance to next stage
                 if (shouldAdvanceStage(updates)) {
