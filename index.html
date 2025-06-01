@@ -228,6 +228,45 @@
             backdrop-filter: blur(10px);
             border: 2px solid transparent;
             transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .position-indicator {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background: #f39c12;
+            color: #000;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+            z-index: 10;
+        }
+
+        .position-indicator.dealer {
+            background: #f39c12;
+            font-size: 0.75rem;
+            letter-spacing: -0.5px;
+        }
+
+        .position-indicator.small-blind {
+            background: #3498db;
+            width: 30px;
+            height: 30px;
+            font-size: 0.8rem;
+        }
+
+        .position-indicator.big-blind {
+            background: #e74c3c;
+            width: 30px;
+            height: 30px;
+            font-size: 0.8rem;
         }
 
         .player-slot.active {
@@ -735,9 +774,22 @@
                 font-size: 2rem;
             }
             
+            .position-indicator {
+                width: 25px;
+                height: 25px;
+                font-size: 0.7rem;
+                top: -8px;
+                right: -8px;
+            }
+            
             .pot-info {
                 font-size: 1.4rem;
                 margin: 20px 0;
+            }
+            
+            .pot-info div {
+                font-size: 0.7rem;
+                margin-top: 3px;
             }
             
             .game-status {
@@ -1012,12 +1064,14 @@
             
             <div class="players-container">
                 <div class="player-slot" id="player1">
+                    <div class="position-indicator" style="display: none;"></div>
                     <div class="player-name">Waiting for player...</div>
                     <div class="player-chips"></div>
                     <div class="player-hand-rank" style="display: none;"></div>
                     <div class="player-cards"></div>
                 </div>
                 <div class="player-slot" id="player2">
+                    <div class="position-indicator" style="display: none;"></div>
                     <div class="player-name">Waiting for player...</div>
                     <div class="player-chips"></div>
                     <div class="player-hand-rank" style="display: none;"></div>
@@ -1025,7 +1079,15 @@
                 </div>
             </div>
 
-            <div class="pot-info">Pot: <span class="chip-icon"></span> <span id="potAmount">0</span></div>
+            <div class="pot-info">
+                Pot: <span class="chip-icon"></span> <span id="potAmount">0</span>
+                <div style="font-size: 0.8rem; margin-top: 5px; color: rgba(255, 255, 255, 0.7);">
+                    Blinds: <span id="blindsInfo">25/50</span> • Hand #<span id="handCount">1</span>
+                    <span style="display: block; font-size: 0.7rem; margin-top: 3px;">
+                        (Blinds double every 5 hands)
+                    </span>
+                </div>
+            </div>
             
             <div class="community-cards" id="communityCards"></div>
             
@@ -1224,10 +1286,14 @@
                 communityCards: [],
                 pot: 0,
                 currentPlayer: 0,
+                dealerPosition: 0,
                 stage: 'waiting', // waiting, preflop, flop, turn, river, showdown
                 currentBet: 0,
                 playersActed: [],
                 lastWinner: null,
+                handCount: 0,
+                smallBlind: 25,
+                bigBlind: 50,
                 created: firebase.firestore.FieldValue.serverTimestamp()
             };
 
@@ -1289,6 +1355,9 @@
                     gameData.playersActed = [];
                     gameData.currentBet = 0;
                     gameData.pot = 0;
+                    gameData.handCount = 0;
+                    gameData.smallBlind = gameData.smallBlind || 25;
+                    gameData.bigBlind = gameData.bigBlind || 50;
                     dealCards(gameData);
                 }
 
@@ -1302,6 +1371,15 @@
         }
 
         function dealCards(gameData) {
+            // Increment hand count
+            gameData.handCount = (gameData.handCount || 0) + 1;
+            
+            // Check if we need to increase blinds (every 5 hands)
+            if (gameData.handCount > 1 && (gameData.handCount - 1) % 5 === 0) {
+                gameData.smallBlind *= 2;
+                gameData.bigBlind *= 2;
+            }
+            
             // Deal 2 cards to each player
             for (let i = 0; i < gameData.players.length; i++) {
                 gameData.players[i].cards = [
@@ -1312,10 +1390,33 @@
                 gameData.players[i].folded = false;
             }
             
-            // Initialize for first turn
+            // Post blinds (for 2 players: player 0 is small blind/dealer, player 1 is big blind)
+            const smallBlindPlayer = gameData.players[0];
+            const bigBlindPlayer = gameData.players[1];
+            
+            // Post small blind (all-in if necessary)
+            const smallBlindAmount = Math.min(gameData.smallBlind, smallBlindPlayer.chips);
+            smallBlindPlayer.chips -= smallBlindAmount;
+            smallBlindPlayer.bet = smallBlindAmount;
+            gameData.pot = smallBlindAmount;
+            
+            // Post big blind (all-in if necessary)
+            const bigBlindAmount = Math.min(gameData.bigBlind, bigBlindPlayer.chips);
+            bigBlindPlayer.chips -= bigBlindAmount;
+            bigBlindPlayer.bet = bigBlindAmount;
+            gameData.pot += bigBlindAmount;
+            
+            // Set current bet to the highest bet (in case someone went all-in)
+            gameData.currentBet = Math.max(smallBlindAmount, bigBlindAmount);
+            
+            // In heads-up (2 players), small blind acts first pre-flop
             gameData.currentPlayer = 0;
             gameData.playersActed = [];
-            gameData.currentBet = 0;
+            
+            // If big blind is all-in with less than the full blind, small blind only needs to match
+            if (bigBlindAmount < gameData.bigBlind && smallBlindAmount < bigBlindAmount) {
+                gameData.currentBet = bigBlindAmount;
+            }
         }
 
         function startGameListener(roomCode) {
@@ -1376,6 +1477,25 @@
                 playerSlot.classList.toggle('active', isMe);
                 playerSlot.style.opacity = player.folded ? '0.5' : '1';
                 
+                // Update position indicators (dealer/blinds)
+                const positionEl = playerSlot.querySelector('.position-indicator');
+                if (currentGame.stage !== 'waiting' && currentGame.players.length === 2) {
+                    // In heads-up, player 0 is dealer/small blind, player 1 is big blind
+                    if (index === 0) {
+                        positionEl.style.display = 'flex';
+                        positionEl.className = 'position-indicator dealer';
+                        positionEl.innerHTML = 'D/SB';
+                        positionEl.title = 'Dealer / Small Blind';
+                    } else if (index === 1) {
+                        positionEl.style.display = 'flex';
+                        positionEl.className = 'position-indicator big-blind';
+                        positionEl.innerHTML = 'BB';
+                        positionEl.title = 'Big Blind';
+                    }
+                } else {
+                    positionEl.style.display = 'none';
+                }
+                
                 playerSlot.querySelector('.player-name').textContent = player.name + (isMe ? ' (You)' : '') + (player.folded ? ' (Folded)' : '');
                 
                 const chipsEl = playerSlot.querySelector('.player-chips');
@@ -1434,6 +1554,16 @@
 
             // Update pot
             document.getElementById('potAmount').textContent = currentGame.pot;
+            
+            // Update blinds info
+            if (currentGame.smallBlind && currentGame.bigBlind) {
+                document.getElementById('blindsInfo').textContent = `${currentGame.smallBlind}/${currentGame.bigBlind}`;
+            }
+            
+            // Update hand count
+            if (currentGame.handCount) {
+                document.getElementById('handCount').textContent = currentGame.handCount;
+            }
 
             // Update community cards
             const communityContainer = document.getElementById('communityCards');
@@ -1505,6 +1635,11 @@
                     statusEl.innerHTML += ` (Current bet: ${currentGame.currentBet})`;
                 }
                 
+                // Show blind increase warning
+                if (currentGame.handCount && currentGame.handCount % 5 === 4) {
+                    statusEl.innerHTML += '<br><small style="color: #e74c3c;">⚠️ Blinds will increase next hand!</small>';
+                }
+                
                 // Show last winner info if this is a new hand
                 if (currentGame.lastWinner && currentGame.stage === 'preflop' && (!currentGame.communityCards || currentGame.communityCards.length === 0)) {
                     statusEl.innerHTML = `<small style="color: #f39c12;">Last hand: ${currentGame.lastWinner.name} won ${currentGame.lastWinner.amount} chips</small><br>` + statusEl.innerHTML;
@@ -1563,7 +1698,10 @@
             document.getElementById('betInput').style.display = 'flex';
             const myPlayer = currentGame.players.find(p => p.id === playerId);
             const callAmount = currentGame.currentBet - myPlayer.bet;
-            const minRaise = Math.max(callAmount * 2, 50); // Minimum raise is double the call or 50
+            
+            // Minimum raise must be at least the size of the big blind or the last raise amount
+            const minRaiseAmount = currentGame.bigBlind;
+            const minRaise = callAmount + minRaiseAmount;
             const maxRaise = myPlayer.chips - callAmount;
             
             const raiseInput = document.getElementById('raiseAmount');
@@ -1720,8 +1858,14 @@
             // Reset bets and players acted for new betting round
             gameData.players.forEach(p => p.bet = 0);
             gameData.currentBet = 0;
-            gameData.currentPlayer = 0;
             gameData.playersActed = [];
+            
+            // Post-flop, big blind (player 1) acts first
+            if (gameData.stage !== 'preflop' && gameData.players.length === 2) {
+                gameData.currentPlayer = 1;
+            } else {
+                gameData.currentPlayer = 0;
+            }
             
             const activePlayers = gameData.players.filter(p => !p.folded);
             
@@ -1840,6 +1984,9 @@
                 <h2>🏆 Game Over! 🏆</h2>
                 <p style="font-size: 2rem; color: #f39c12; margin: 20px 0;">${winner.name} Wins!</p>
                 <p>${loser.name} has gone bankrupt</p>
+                <p style="margin-top: 10px; font-size: 0.9rem; color: rgba(255, 255, 255, 0.7);">
+                    Game ended at blinds ${currentGame.smallBlind}/${currentGame.bigBlind}
+                </p>
                 <p style="margin-top: 20px;">Final chip count: <strong>${winner.chips}</strong></p>
                 <button class="btn btn-primary" onclick="startNewMatch()">New Game</button>
                 <button class="btn btn-secondary" onclick="returnToLobby()">Return to Lobby</button>
@@ -1859,6 +2006,11 @@
                 currentGame.players.forEach(player => {
                     player.chips = 5000;
                 });
+                
+                // Reset blinds and hand count
+                currentGame.smallBlind = 25;
+                currentGame.bigBlind = 50;
+                currentGame.handCount = 0;
                 
                 // Clear the last winner and reset stage
                 currentGame.lastWinner = null;
@@ -2092,6 +2244,12 @@
         }
 
         function resetGame(gameData) {
+            // Rotate dealer position (swap players for heads-up)
+            if (gameData.players.length === 2) {
+                // Swap player positions to rotate dealer/blinds
+                [gameData.players[0], gameData.players[1]] = [gameData.players[1], gameData.players[0]];
+            }
+            
             // Reset for next hand
             gameData.deck = createDeck();
             gameData.communityCards = [];
