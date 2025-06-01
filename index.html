@@ -4,12 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Texas Hold'em Poker - Live Multiplayer</title>
-    <style>        <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Texas Hold'em Poker - Live Multiplayer</title>
     <style>
         * {
             margin: 0;
@@ -1299,6 +1293,7 @@
 
             try {
                 await db.collection('games').doc(roomCode).set(gameData);
+                console.log('Created new game:', roomCode);
                 startGameListener(roomCode);
                 showGame(roomCode);
             } catch (error) {
@@ -1365,9 +1360,17 @@
                     gameData.handCount = gameData.handCount || 0;
                     gameData.smallBlind = gameData.smallBlind || 25;
                     gameData.bigBlind = gameData.bigBlind || 50;
+                    
+                    // Deal cards and post blinds
                     dealCards(gameData);
                     
-                    // Update the pot after dealing cards and posting blinds
+                    // Log the state after dealing to debug
+                    console.log('After dealing cards and posting blinds:');
+                    console.log('Player 0:', gameData.players[0].name, 'Chips:', gameData.players[0].chips, 'Bet:', gameData.players[0].bet);
+                    console.log('Player 1:', gameData.players[1].name, 'Chips:', gameData.players[1].chips, 'Bet:', gameData.players[1].bet);
+                    console.log('Pot:', gameData.pot, 'Current Bet:', gameData.currentBet);
+                    
+                    // Update the game with all changes including blinds
                     await gameRef.update({
                         players: gameData.players,
                         stage: gameData.stage,
@@ -1379,6 +1382,9 @@
                         smallBlind: gameData.smallBlind,
                         bigBlind: gameData.bigBlind
                     });
+                    
+                    startGameListener(roomCode);
+                    showGame(roomCode);
                     return;
                 }
 
@@ -1418,17 +1424,28 @@
             const smallBlindPlayer = gameData.players[0];
             const bigBlindPlayer = gameData.players[1];
             
+            console.log('Before posting blinds:');
+            console.log('Small blind player chips:', smallBlindPlayer.chips);
+            console.log('Big blind player chips:', bigBlindPlayer.chips);
+            
             // Post small blind (all-in if necessary)
             const smallBlindAmount = Math.min(gameData.smallBlind, smallBlindPlayer.chips);
             smallBlindPlayer.chips -= smallBlindAmount;
             smallBlindPlayer.bet = smallBlindAmount;
             gameData.pot += smallBlindAmount;
             
+            console.log('Posted small blind:', smallBlindAmount);
+            console.log('Small blind player chips after:', smallBlindPlayer.chips);
+            
             // Post big blind (all-in if necessary)
             const bigBlindAmount = Math.min(gameData.bigBlind, bigBlindPlayer.chips);
             bigBlindPlayer.chips -= bigBlindAmount;
             bigBlindPlayer.bet = bigBlindAmount;
             gameData.pot += bigBlindAmount;
+            
+            console.log('Posted big blind:', bigBlindAmount);
+            console.log('Big blind player chips after:', bigBlindPlayer.chips);
+            console.log('Total pot after blinds:', gameData.pot);
             
             // Set current bet to the highest bet (in case someone went all-in)
             gameData.currentBet = Math.max(smallBlindAmount, bigBlindAmount);
@@ -1651,10 +1668,20 @@
                 
                 const stageName = stageNames[currentGame.stage] || currentGame.stage;
                 
-                if (isMyTurn) {
-                    statusEl.innerHTML = `<strong>${stageName}</strong> - ${isMobile ? '👆 ' : ''}Your turn to act`;
+                // Check if blinds were just posted (pre-flop with pot > 0)
+                if (currentGame.stage === 'preflop' && currentGame.pot > 0 && (!currentGame.communityCards || currentGame.communityCards.length === 0)) {
+                    const blindsPosted = `<small style="color: #f39c12;">💰 Blinds posted: ${currentGame.smallBlind}/${currentGame.bigBlind}</small><br>`;
+                    if (isMyTurn) {
+                        statusEl.innerHTML = blindsPosted + `<strong>${stageName}</strong> - ${isMobile ? '👆 ' : ''}Your turn to act`;
+                    } else {
+                        statusEl.innerHTML = blindsPosted + `<strong>${stageName}</strong> - Waiting for ${currentPlayer.name}...`;
+                    }
                 } else {
-                    statusEl.innerHTML = `<strong>${stageName}</strong> - Waiting for ${currentPlayer.name}...`;
+                    if (isMyTurn) {
+                        statusEl.innerHTML = `<strong>${stageName}</strong> - ${isMobile ? '👆 ' : ''}Your turn to act`;
+                    } else {
+                        statusEl.innerHTML = `<strong>${stageName}</strong> - Waiting for ${currentPlayer.name}...`;
+                    }
                 }
                 
                 // Show current bet if any
@@ -2000,6 +2027,11 @@
                 setTimeout(async () => {
                     resetGame(gameData);
                     
+                    console.log('After resetGame and dealCards for new hand:');
+                    console.log('Player 0:', gameData.players[0].name, 'Chips:', gameData.players[0].chips, 'Bet:', gameData.players[0].bet);
+                    console.log('Player 1:', gameData.players[1].name, 'Chips:', gameData.players[1].chips, 'Bet:', gameData.players[1].bet);
+                    console.log('Pot:', gameData.pot, 'Current Bet:', gameData.currentBet);
+                    
                     // Update Firestore with the new game state including pot with blinds
                     const gameRef = db.collection('games').doc(currentGame.id);
                     await gameRef.update({
@@ -2048,6 +2080,9 @@
             if (currentGame && currentGame.players) {
                 currentGame.players.forEach(player => {
                     player.chips = 5000;
+                    player.cards = [];
+                    player.bet = 0;
+                    player.folded = false;
                 });
                 
                 // Reset blinds and hand count
@@ -2055,13 +2090,25 @@
                 currentGame.bigBlind = 50;
                 currentGame.handCount = 0;
                 currentGame.pot = 0;
+                currentGame.currentBet = 0;
+                currentGame.playersActed = [];
                 
                 // Clear the last winner and reset stage
                 currentGame.lastWinner = null;
                 currentGame.stage = 'preflop';
                 
-                // Reset game state
-                resetGame(currentGame);
+                // Create new deck
+                currentGame.deck = createDeck();
+                currentGame.communityCards = [];
+                currentGame.currentPlayer = 0;
+                
+                // Deal cards and post blinds for the new game
+                dealCards(currentGame);
+                
+                console.log('Starting new match after bankruptcy:');
+                console.log('Player 0:', currentGame.players[0].name, 'Chips:', currentGame.players[0].chips, 'Bet:', currentGame.players[0].bet);
+                console.log('Player 1:', currentGame.players[1].name, 'Chips:', currentGame.players[1].chips, 'Bet:', currentGame.players[1].bet);
+                console.log('Pot:', currentGame.pot, 'Current Bet:', currentGame.currentBet);
                 
                 // Update the game in Firestore with all fields
                 const gameRef = db.collection('games').doc(currentGame.id);
