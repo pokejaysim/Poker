@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+        <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -389,8 +389,98 @@
             to { transform: rotate(360deg); }
         }
 
+        .login-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            text-align: center;
+        }
+
+        .login-container h1 {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, #f39c12, #e74c3c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(243, 156, 18, 0.5);
+        }
+
+        .login-container p {
+            font-size: 1.2rem;
+            margin-bottom: 3rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .google-signin-btn {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px 30px;
+            background: white;
+            color: #333;
+            border: none;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .google-signin-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .google-icon {
+            width: 24px;
+            height: 24px;
+        }
+
+        .user-info {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 50px;
+            backdrop-filter: blur(10px);
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #f39c12;
+        }
+
+        .user-name {
+            font-weight: 600;
+            color: #f39c12;
+        }
+
+        .sign-out-btn {
+            padding: 8px 16px;
+            background: rgba(231, 76, 60, 0.8);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .sign-out-btn:hover {
+            background: rgba(231, 76, 60, 1);
+        }
+
         @media (max-width: 768px) {
-            .lobby h1 {
+            .lobby h1, .login-container h1 {
                 font-size: 2.5rem;
             }
             
@@ -414,11 +504,27 @@
 </head>
 <body>
     <div class="container">
-        <div class="lobby" id="lobby">
+        <div class="login-container" id="loginScreen">
             <h1>Texas Hold'em Poker</h1>
-            <div class="input-group">
-                <input type="text" id="playerName" placeholder="Enter your name" maxlength="20">
+            <p>Sign in to start playing</p>
+            <button class="google-signin-btn" onclick="signInWithGoogle()">
+                <svg class="google-icon" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Sign in with Google
+            </button>
+        </div>
+
+        <div class="lobby" id="lobby" style="display: none;">
+            <div class="user-info" id="userInfo">
+                <img class="user-avatar" id="userAvatar" src="" alt="Avatar">
+                <span class="user-name" id="userName"></span>
+                <button class="sign-out-btn" onclick="signOut()">Sign Out</button>
             </div>
+            <h1>Texas Hold'em Poker</h1>
             <div class="lobby-actions">
                 <button class="btn btn-primary" onclick="createGame()">Create Game</button>
                 <button class="btn btn-secondary" onclick="showJoinGame()">Join Game</button>
@@ -431,7 +537,12 @@
             </div>
         </div>
 
-        <div class="game-table" id="gameTable">
+        <div class="game-table" id="gameTable" style="display: none;">
+            <div class="user-info" style="position: relative; margin-bottom: 20px;">
+                <img class="user-avatar" id="gameUserAvatar" src="" alt="Avatar">
+                <span class="user-name" id="gameUserName"></span>
+                <button class="sign-out-btn" onclick="leaveGame()">Leave Game</button>
+            </div>
             <div class="room-code" id="roomCodeDisplay"></div>
             
             <div class="players-container">
@@ -469,6 +580,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-app-compat.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-firestore-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-auth-compat.min.js"></script>
     
     <script>
         // Firebase configuration
@@ -484,12 +596,63 @@
         // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
+        const auth = firebase.auth();
 
         // Game state
         let currentGame = null;
         let playerId = null;
         let playerName = null;
+        let playerPhotoURL = null;
         let gameListener = null;
+
+        // Auth state observer
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                // User is signed in
+                playerId = user.uid;
+                playerName = user.displayName;
+                playerPhotoURL = user.photoURL;
+                
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('lobby').style.display = 'flex';
+                document.getElementById('userName').textContent = playerName;
+                document.getElementById('userAvatar').src = playerPhotoURL;
+            } else {
+                // User is signed out
+                document.getElementById('loginScreen').style.display = 'flex';
+                document.getElementById('lobby').style.display = 'none';
+                document.getElementById('gameTable').style.display = 'none';
+                
+                // Clean up any active game listeners
+                if (gameListener) {
+                    gameListener();
+                    gameListener = null;
+                }
+            }
+        });
+
+        // Sign in with Google
+        async function signInWithGoogle() {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            try {
+                await auth.signInWithPopup(provider);
+            } catch (error) {
+                console.error('Error signing in:', error);
+                alert('Error signing in. Please try again.');
+            }
+        }
+
+        // Sign out
+        async function signOut() {
+            try {
+                await auth.signOut();
+                currentGame = null;
+                playerId = null;
+                playerName = null;
+            } catch (error) {
+                console.error('Error signing out:', error);
+            }
+        }
 
         // Card deck
         const suits = ['♠', '♥', '♦', '♣'];
@@ -498,10 +661,6 @@
 
         function generateRoomCode() {
             return Math.random().toString(36).substring(2, 8).toUpperCase();
-        }
-
-        function generatePlayerId() {
-            return Math.random().toString(36).substring(2, 15);
         }
 
         function createDeck() {
@@ -524,13 +683,11 @@
         }
 
         async function createGame() {
-            playerName = document.getElementById('playerName').value.trim();
-            if (!playerName) {
-                alert('Please enter your name');
+            if (!auth.currentUser) {
+                alert('Please sign in first');
                 return;
             }
 
-            playerId = generatePlayerId();
             const roomCode = generateRoomCode();
             
             const gameData = {
@@ -549,6 +706,7 @@
                 currentPlayer: 0,
                 stage: 'waiting', // waiting, preflop, flop, turn, river, showdown
                 currentBet: 0,
+                playersActed: [],
                 created: firebase.firestore.FieldValue.serverTimestamp()
             };
 
@@ -567,20 +725,17 @@
         }
 
         async function joinGame() {
-            playerName = document.getElementById('playerName').value.trim();
-            const roomCode = document.getElementById('roomCode').value.trim().toUpperCase();
-            
-            if (!playerName) {
-                alert('Please enter your name');
+            if (!auth.currentUser) {
+                alert('Please sign in first');
                 return;
             }
+            
+            const roomCode = document.getElementById('roomCode').value.trim().toUpperCase();
             
             if (!roomCode) {
                 alert('Please enter a room code');
                 return;
             }
-
-            playerId = generatePlayerId();
 
             try {
                 const gameRef = db.collection('games').doc(roomCode);
@@ -609,6 +764,10 @@
 
                 if (gameData.players.length === 2) {
                     gameData.stage = 'preflop';
+                    gameData.currentPlayer = 0; // First player starts
+                    gameData.playersActed = [];
+                    gameData.currentBet = 0;
+                    gameData.pot = 0;
                     dealCards(gameData);
                 }
 
@@ -628,7 +787,14 @@
                     gameData.deck.pop(),
                     gameData.deck.pop()
                 ];
+                gameData.players[i].bet = 0;
+                gameData.players[i].folded = false;
             }
+            
+            // Initialize for first turn
+            gameData.currentPlayer = 0;
+            gameData.playersActed = [];
+            gameData.currentBet = 0;
         }
 
         function startGameListener(roomCode) {
@@ -650,10 +816,35 @@
             document.getElementById('lobby').style.display = 'none';
             document.getElementById('gameTable').style.display = 'block';
             document.getElementById('roomCodeDisplay').textContent = `Room: ${roomCode}`;
+            document.getElementById('gameUserName').textContent = playerName;
+            document.getElementById('gameUserAvatar').src = playerPhotoURL;
+        }
+
+        async function leaveGame() {
+            if (gameListener) {
+                gameListener();
+                gameListener = null;
+            }
+            
+            // TODO: Optionally remove player from game in Firestore
+            
+            currentGame = null;
+            document.getElementById('gameTable').style.display = 'none';
+            document.getElementById('lobby').style.display = 'flex';
+            document.getElementById('joinGameSection').style.display = 'none';
+            document.getElementById('roomCode').value = '';
         }
 
         function updateGameUI() {
             if (!currentGame) return;
+
+            console.log('Game state:', {
+                stage: currentGame.stage,
+                currentPlayer: currentGame.currentPlayer,
+                currentBet: currentGame.currentBet,
+                pot: currentGame.pot,
+                playersActed: currentGame.playersActed
+            });
 
             // Update players
             currentGame.players.forEach((player, index) => {
@@ -663,9 +854,11 @@
                 
                 playerSlot.classList.toggle('current-player', isCurrentPlayer && currentGame.stage !== 'waiting');
                 playerSlot.classList.toggle('active', isMe);
+                playerSlot.style.opacity = player.folded ? '0.5' : '1';
                 
-                playerSlot.querySelector('.player-name').textContent = player.name + (isMe ? ' (You)' : '');
-                playerSlot.querySelector('.player-chips').innerHTML = `<span class="chip-icon"></span> ${player.chips}`;
+                playerSlot.querySelector('.player-name').textContent = player.name + (isMe ? ' (You)' : '') + (player.folded ? ' (Folded)' : '');
+                playerSlot.querySelector('.player-chips').innerHTML = `<span class="chip-icon"></span> ${player.chips}` + 
+                    (player.bet > 0 ? ` (Bet: ${player.bet})` : '');
                 
                 const cardsContainer = playerSlot.querySelector('.player-cards');
                 cardsContainer.innerHTML = '';
@@ -711,7 +904,27 @@
             } else {
                 const currentPlayer = currentGame.players[currentGame.currentPlayer];
                 const isMyTurn = currentPlayer.id === playerId;
-                statusEl.textContent = isMyTurn ? 'Your turn' : `Waiting for ${currentPlayer.name}...`;
+                
+                // Show current stage
+                const stageNames = {
+                    'preflop': 'Pre-Flop',
+                    'flop': 'Flop',
+                    'turn': 'Turn',
+                    'river': 'River'
+                };
+                
+                const stageName = stageNames[currentGame.stage] || currentGame.stage;
+                
+                if (isMyTurn) {
+                    statusEl.innerHTML = `<strong>${stageName}</strong> - Your turn to act`;
+                } else {
+                    statusEl.innerHTML = `<strong>${stageName}</strong> - Waiting for ${currentPlayer.name}...`;
+                }
+                
+                // Show current bet if any
+                if (currentGame.currentBet > 0) {
+                    statusEl.innerHTML += ` (Current bet: ${currentGame.currentBet})`;
+                }
             }
         }
 
@@ -719,9 +932,20 @@
             const actionButtons = document.getElementById('actionButtons');
             const betInput = document.getElementById('betInput');
             
+            if (!currentGame || !currentGame.players) return;
+            
             const currentPlayer = currentGame.players[currentGame.currentPlayer];
             const isMyTurn = currentPlayer && currentPlayer.id === playerId;
             const myPlayer = currentGame.players.find(p => p.id === playerId);
+            
+            console.log('Action buttons update:', {
+                currentPlayerIndex: currentGame.currentPlayer,
+                currentPlayerId: currentPlayer?.id,
+                myPlayerId: playerId,
+                isMyTurn,
+                stage: currentGame.stage,
+                myPlayerFolded: myPlayer?.folded
+            });
             
             if (isMyTurn && currentGame.stage !== 'waiting' && currentGame.stage !== 'showdown' && !myPlayer.folded) {
                 actionButtons.style.display = 'flex';
@@ -729,6 +953,7 @@
                 // Update button states
                 const checkBtn = actionButtons.querySelector('.btn-check');
                 const callBtn = actionButtons.querySelector('.btn-call');
+                const raiseBtn = actionButtons.querySelector('.btn-raise');
                 
                 const callAmount = currentGame.currentBet - myPlayer.bet;
                 
@@ -738,7 +963,20 @@
                 } else {
                     checkBtn.style.display = 'none';
                     callBtn.style.display = 'block';
-                    callBtn.textContent = `Call ${callAmount}`;
+                    
+                    // Handle all-in situations
+                    if (callAmount >= myPlayer.chips) {
+                        callBtn.textContent = `All-in ${myPlayer.chips}`;
+                    } else {
+                        callBtn.textContent = `Call ${callAmount}`;
+                    }
+                }
+                
+                // Disable raise if player doesn't have enough chips
+                if (myPlayer.chips <= callAmount) {
+                    raiseBtn.disabled = true;
+                } else {
+                    raiseBtn.disabled = false;
                 }
             } else {
                 actionButtons.style.display = 'none';
@@ -749,13 +987,20 @@
         function showRaiseInput() {
             document.getElementById('betInput').style.display = 'flex';
             const myPlayer = currentGame.players.find(p => p.id === playerId);
-            const minRaise = (currentGame.currentBet - myPlayer.bet) * 2;
-            document.getElementById('raiseAmount').min = minRaise;
-            document.getElementById('raiseAmount').placeholder = `Min: ${minRaise}`;
+            const callAmount = currentGame.currentBet - myPlayer.bet;
+            const minRaise = Math.max(callAmount * 2, 50); // Minimum raise is double the call or 50
+            const maxRaise = myPlayer.chips - callAmount;
+            
+            const raiseInput = document.getElementById('raiseAmount');
+            raiseInput.min = minRaise;
+            raiseInput.max = maxRaise;
+            raiseInput.value = minRaise;
+            raiseInput.placeholder = `Min: ${minRaise}, Max: ${maxRaise}`;
         }
 
         async function playerAction(action) {
-            const myPlayer = currentGame.players.find(p => p.id === playerId);
+            const myPlayerIndex = currentGame.players.findIndex(p => p.id === playerId);
+            const myPlayer = currentGame.players[myPlayerIndex];
             const gameRef = db.collection('games').doc(currentGame.id);
             
             try {
@@ -766,57 +1011,97 @@
                     currentPlayer: currentGame.currentPlayer,
                     stage: currentGame.stage,
                     communityCards: currentGame.communityCards,
-                    deck: currentGame.deck
+                    deck: currentGame.deck,
+                    playersActed: currentGame.playersActed || []
                 };
 
                 switch (action) {
                     case 'fold':
                         myPlayer.folded = true;
+                        // When folding, we still count as having acted
+                        if (!updates.playersActed.includes(myPlayerIndex)) {
+                            updates.playersActed.push(myPlayerIndex);
+                        }
                         break;
                         
                     case 'check':
-                        // No action needed
+                        // No action needed for chips
                         break;
                         
                     case 'call':
                         const callAmount = currentGame.currentBet - myPlayer.bet;
-                        if (callAmount <= myPlayer.chips) {
-                            myPlayer.chips -= callAmount;
-                            myPlayer.bet += callAmount;
-                            updates.pot += callAmount;
-                        }
+                        const actualCallAmount = Math.min(callAmount, myPlayer.chips);
+                        
+                        myPlayer.chips -= actualCallAmount;
+                        myPlayer.bet += actualCallAmount;
+                        updates.pot += actualCallAmount;
                         break;
                         
                     case 'raise':
                         const raiseAmount = parseInt(document.getElementById('raiseAmount').value);
-                        const totalBet = currentGame.currentBet - myPlayer.bet + raiseAmount;
+                        if (isNaN(raiseAmount) || raiseAmount <= 0) {
+                            alert('Please enter a valid raise amount');
+                            return;
+                        }
                         
-                        if (totalBet <= myPlayer.chips) {
-                            myPlayer.chips -= totalBet;
-                            myPlayer.bet += totalBet;
-                            updates.pot += totalBet;
+                        const callCost = currentGame.currentBet - myPlayer.bet;
+                        const totalCost = callCost + raiseAmount;
+                        
+                        if (totalCost <= myPlayer.chips) {
+                            myPlayer.chips -= totalCost;
+                            myPlayer.bet = currentGame.currentBet + raiseAmount;
+                            updates.pot += totalCost;
                             updates.currentBet = myPlayer.bet;
+                            // When someone raises, only they have acted in this betting round
+                            updates.playersActed = [myPlayerIndex];
+                        } else {
+                            alert('Insufficient chips for this raise');
+                            return;
                         }
                         document.getElementById('betInput').style.display = 'none';
+                        document.getElementById('raiseAmount').value = '';
                         break;
                 }
+
+                // Track that this player has acted (unless they raised, or already acted for fold)
+                if (action !== 'raise' && action !== 'fold' && !updates.playersActed.includes(myPlayerIndex)) {
+                    updates.playersActed.push(myPlayerIndex);
+                }
+
+                console.log('After action:', {
+                    action,
+                    playerIndex: myPlayerIndex,
+                    playersActed: updates.playersActed,
+                    currentBet: updates.currentBet,
+                    shouldAdvance: shouldAdvanceStage(updates)
+                });
 
                 // Check if we need to advance to next stage
                 if (shouldAdvanceStage(updates)) {
                     advanceStage(updates);
                 } else {
                     // Move to next player
-                    updates.currentPlayer = (updates.currentPlayer + 1) % updates.players.length;
+                    let nextPlayer = (updates.currentPlayer + 1) % updates.players.length;
                     
                     // Skip folded players
-                    while (updates.players[updates.currentPlayer].folded) {
-                        updates.currentPlayer = (updates.currentPlayer + 1) % updates.players.length;
+                    let attempts = 0;
+                    while (updates.players[nextPlayer].folded && attempts < updates.players.length) {
+                        nextPlayer = (nextPlayer + 1) % updates.players.length;
+                        attempts++;
+                    }
+                    
+                    // Safety check: if all players are folded except one (shouldn't happen but just in case)
+                    if (attempts >= updates.players.length) {
+                        advanceStage(updates);
+                    } else {
+                        updates.currentPlayer = nextPlayer;
                     }
                 }
 
                 await gameRef.update(updates);
             } catch (error) {
                 console.error('Error performing action:', error);
+                alert('Error performing action. Please try again.');
             }
         }
 
@@ -828,21 +1113,44 @@
                 return true;
             }
             
+            // Initialize playersActed if it doesn't exist
+            if (!gameData.playersActed) {
+                gameData.playersActed = [];
+            }
+            
             // Check if all active players have matched the current bet
-            const allMatched = activePlayers.every(p => p.bet === gameData.currentBet);
+            const allMatched = activePlayers.every(p => p.bet === gameData.currentBet || p.chips === 0);
             
-            // Check if we've gone around to all players
-            const firstActivePlayer = gameData.players.findIndex(p => !p.folded);
-            const completedRound = gameData.currentPlayer === firstActivePlayer && allMatched;
+            // Count active players who need to act
+            const activePlayerIndices = gameData.players
+                .map((p, i) => ({ player: p, index: i }))
+                .filter(({ player }) => !player.folded)
+                .map(({ index }) => index);
             
-            return completedRound || (allMatched && gameData.currentBet > 0);
+            // Check if all active players have acted
+            const allActivePlayersActed = activePlayerIndices.every(index => 
+                gameData.playersActed.includes(index)
+            );
+            
+            // Advance if all active players have acted and all bets are matched
+            return allActivePlayersActed && allMatched;
         }
 
         function advanceStage(gameData) {
-            // Reset bets for new betting round
+            // Reset bets and players acted for new betting round
             gameData.players.forEach(p => p.bet = 0);
             gameData.currentBet = 0;
             gameData.currentPlayer = 0;
+            gameData.playersActed = [];
+            
+            const activePlayers = gameData.players.filter(p => !p.folded);
+            
+            // If only one player remains, they win
+            if (activePlayers.length === 1) {
+                gameData.stage = 'showdown';
+                determineWinner(gameData);
+                return;
+            }
             
             switch (gameData.stage) {
                 case 'preflop':
@@ -996,6 +1304,7 @@
             gameData.currentBet = 0;
             gameData.currentPlayer = 0;
             gameData.stage = 'preflop';
+            gameData.playersActed = [];
             
             gameData.players.forEach(player => {
                 player.cards = [];
