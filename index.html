@@ -1725,7 +1725,7 @@
         });
 
         // Sign in with Google
-        async function signInWithGoogle() {
+        window.signInWithGoogle = async function() {
             const provider = new firebase.auth.GoogleAuthProvider();
             try {
                 await auth.signInWithPopup(provider);
@@ -1748,7 +1748,7 @@
         }
 
         // Sign in anonymously
-        async function signInAnonymously() {
+        window.signInAnonymously = async function() {
             try {
                 await auth.signInAnonymously();
             } catch (error) {
@@ -1766,7 +1766,7 @@
         }
 
         // Sign out
-        async function signOut() {
+        window.signOut = async function() {
             try {
                 await auth.signOut();
                 currentGame = null;
@@ -1805,7 +1805,7 @@
             return newDeck;
         }
 
-        async function createGame() {
+        window.createGame = async function() {
             if (!auth.currentUser) {
                 alert('Please sign in first');
                 return;
@@ -1854,11 +1854,11 @@
             }
         }
 
-        function showJoinGame() {
+        window.showJoinGame = function() {
             document.getElementById('joinGameSection').style.display = 'block';
         }
 
-        async function joinGame() {
+        window.joinGame = async function() {
             if (!auth.currentUser) {
                 alert('Please sign in first');
                 return;
@@ -2070,7 +2070,7 @@
             document.getElementById('gameUserAvatar').src = playerPhotoURL;
         }
 
-        async function leaveGame() {
+        window.leaveGame = async function() {
             if (gameListener) {
                 gameListener();
                 gameListener = null;
@@ -2383,7 +2383,7 @@
             }
         }
 
-        function showRaiseInput() {
+        window.showRaiseInput = function() {
             document.getElementById('betInput').style.display = 'flex';
             const myPlayer = currentGame.players.find(p => p.id === playerId);
             const callAmount = currentGame.currentBet - myPlayer.bet;
@@ -2408,7 +2408,7 @@
             }
         }
 
-        async function playerAction(action) {
+        window.playerAction = async function(action) {
             // Prevent actions during showdown or game over
             if (currentGame.stage === 'showdown' || currentGame.stage === 'gameover') {
                 return;
@@ -2786,7 +2786,7 @@
             document.body.appendChild(announcement);
         }
         
-        async function startNewMatch() {
+        window.startNewMatch = async function() {
             // Close the announcement
             const announcement = document.querySelector('.winner-announcement');
             if (announcement) {
@@ -2849,7 +2849,7 @@
             }
         }
         
-        function returnToLobby() {
+        window.returnToLobby = function() {
             // Close the announcement
             const announcement = document.querySelector('.winner-announcement');
             if (announcement) {
