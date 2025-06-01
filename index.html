@@ -1689,7 +1689,7 @@
             } else if (currentGame.stage === 'showdown') {
                 // Show who won during showdown
                 if (currentGame.lastWinner) {
-                    statusEl.innerHTML = `<strong style="color: #f39c12;">${currentGame.lastWinner.name} wins ${currentGame.lastWinner.amount} chips with ${currentGame.lastWinner.hand}!</strong>`;
+                    statusEl.innerHTML = `<strong style="color: #f39c12;">${currentGame.lastWinner.name} wins ${currentGame.lastWinner.amount} chips with ${currentGame.lastWinner.hand}!</strong><br><small style="color: #ecf0f1;">Dealing new hand...</small>`;
                 } else {
                     statusEl.textContent = 'Showdown!';
                 }
@@ -1766,7 +1766,25 @@
             const isMyTurn = currentPlayer && currentPlayer.id === playerId;
             const myPlayer = currentGame.players.find(p => p.id === playerId);
             
+            // Check if we're in showdown and need to deal a new hand
+            if (currentGame.stage === 'showdown' && currentGame.lastWinner) {
+                // Show a "Deal New Hand" button as a fallback
+                actionButtons.innerHTML = `
+                    <button class="action-btn btn-primary" onclick="manuallyDealNewHand()">Deal New Hand</button>
+                `;
+                actionButtons.style.display = 'flex';
+                betInput.style.display = 'none';
+                return;
+            }
+            
             if (isMyTurn && currentGame.stage !== 'waiting' && currentGame.stage !== 'showdown' && currentGame.stage !== 'gameover' && !myPlayer.folded) {
+                // Reset to default action buttons
+                actionButtons.innerHTML = `
+                    <button class="action-btn btn-fold" onclick="playerAction('fold')">Fold</button>
+                    <button class="action-btn btn-check" onclick="playerAction('check')">Check</button>
+                    <button class="action-btn btn-call" onclick="playerAction('call')">Call</button>
+                    <button class="action-btn btn-raise" onclick="showRaiseInput()">Raise</button>
+                `;
                 actionButtons.style.display = 'flex';
                 
                 // Update button states
@@ -2092,36 +2110,53 @@
                 // Then show the winner popup
                 showFinalWinner(winner, bankruptPlayer);
             } else {
-                // No one bankrupt - immediately start new hand
+                // No one bankrupt - show winner briefly then start new hand
                 console.log('Hand complete - Winner:', gameData.lastWinner.name, 'won', gameData.lastWinner.amount);
                 
-                // Reset the game state for new hand
-                resetGame(gameData);
-                
-                console.log('After resetGame and dealCards for new hand:');
-                console.log('Player 0:', gameData.players[0].name, 'Chips:', gameData.players[0].chips, 'Bet:', gameData.players[0].bet);
-                console.log('Player 1:', gameData.players[1].name, 'Chips:', gameData.players[1].chips, 'Bet:', gameData.players[1].bet);
-                console.log('Pot:', gameData.pot, 'Current Bet:', gameData.currentBet);
-                console.log('Stage:', gameData.stage, 'Current Player:', gameData.currentPlayer);
-                
-                // Update Firestore with the new game state including pot with blinds
+                // First update to showdown to display the winner
                 const gameRef = db.collection('games').doc(currentGame.id);
                 await gameRef.update({
                     players: gameData.players,
-                    deck: gameData.deck,
-                    communityCards: gameData.communityCards,
-                    pot: gameData.pot,
-                    currentBet: gameData.currentBet,
-                    currentPlayer: gameData.currentPlayer,
-                    stage: gameData.stage,
-                    playersActed: gameData.playersActed,
-                    handCount: gameData.handCount,
-                    smallBlind: gameData.smallBlind,
-                    bigBlind: gameData.bigBlind,
-                    lastWinner: gameData.lastWinner
+                    stage: 'showdown',
+                    lastWinner: gameData.lastWinner,
+                    pot: gameData.pot
                 });
                 
-                console.log('Firestore updated with new hand data');
+                // Wait a brief moment to show the winner, then start new hand
+                setTimeout(async () => {
+                    console.log('Starting new hand...');
+                    
+                    // Get fresh game data to avoid conflicts
+                    const gameDoc = await gameRef.get();
+                    const freshGameData = gameDoc.data();
+                    
+                    // Reset the game state for new hand
+                    resetGame(freshGameData);
+                    
+                    console.log('After resetGame and dealCards for new hand:');
+                    console.log('Player 0:', freshGameData.players[0].name, 'Chips:', freshGameData.players[0].chips, 'Bet:', freshGameData.players[0].bet);
+                    console.log('Player 1:', freshGameData.players[1].name, 'Chips:', freshGameData.players[1].chips, 'Bet:', freshGameData.players[1].bet);
+                    console.log('Pot:', freshGameData.pot, 'Current Bet:', freshGameData.currentBet);
+                    console.log('Stage:', freshGameData.stage, 'Current Player:', freshGameData.currentPlayer);
+                    
+                    // Update Firestore with the new game state
+                    await gameRef.update({
+                        players: freshGameData.players,
+                        deck: freshGameData.deck,
+                        communityCards: freshGameData.communityCards,
+                        pot: freshGameData.pot,
+                        currentBet: freshGameData.currentBet,
+                        currentPlayer: freshGameData.currentPlayer,
+                        stage: freshGameData.stage,
+                        playersActed: freshGameData.playersActed,
+                        handCount: freshGameData.handCount,
+                        smallBlind: freshGameData.smallBlind,
+                        bigBlind: freshGameData.bigBlind,
+                        lastWinner: freshGameData.lastWinner
+                    });
+                    
+                    console.log('Firestore updated with new hand data');
+                }, 1500); // 1.5 second delay to show winner
             }
         }
         
@@ -2449,10 +2484,51 @@
             // Only deal if no one is bankrupt
             const bankruptPlayer = gameData.players.find(p => p.chips === 0);
             if (!bankruptPlayer) {
-                dealCards(gameData);
-                console.log('New hand dealt - Pot after blinds:', gameData.pot);
+                try {
+                    dealCards(gameData);
+                    console.log('New hand dealt successfully - Pot after blinds:', gameData.pot);
+                } catch (error) {
+                    console.error('Error dealing cards:', error);
+                }
             }
         }
+        
+        async function manuallyDealNewHand() {
+            if (!currentGame || currentGame.stage !== 'showdown') return;
+            
+            console.log('Manually dealing new hand...');
+            
+            try {
+                const gameRef = db.collection('games').doc(currentGame.id);
+                const gameDoc = await gameRef.get();
+                const gameData = gameDoc.data();
+                
+                // Reset the game state for new hand
+                resetGame(gameData);
+                
+                // Update Firestore with the new game state
+                await gameRef.update({
+                    players: gameData.players,
+                    deck: gameData.deck,
+                    communityCards: gameData.communityCards,
+                    pot: gameData.pot,
+                    currentBet: gameData.currentBet,
+                    currentPlayer: gameData.currentPlayer,
+                    stage: gameData.stage,
+                    playersActed: gameData.playersActed,
+                    handCount: gameData.handCount,
+                    smallBlind: gameData.smallBlind,
+                    bigBlind: gameData.bigBlind,
+                    lastWinner: gameData.lastWinner
+                });
+                
+                console.log('New hand dealt manually');
+            } catch (error) {
+                console.error('Error dealing new hand:', error);
+                alert('Error dealing new hand. Please try again.');
+            }
+        }
+        
         // Initialize app
         window.addEventListener('load', () => {
             // Show mobile hint
