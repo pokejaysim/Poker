@@ -151,8 +151,23 @@
             box-shadow: 0 0 20px rgba(243, 156, 18, 0.3);
         }
 
-        .game-table {
+        .game-container {
             display: none;
+            position: relative;
+        }
+
+        .game-layout {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        .game-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .game-table {
             position: relative;
             background: radial-gradient(ellipse at center, #2d4a2b 0%, #1a2f19 100%);
             border-radius: 200px;
@@ -821,6 +836,246 @@
             border-bottom: none;
         }
 
+        /* Chat Styles */
+        .chat-container {
+            width: 350px;
+            height: 600px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 15px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .chat-header {
+            padding: 15px;
+            background: rgba(243, 156, 18, 0.1);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 13px 13px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-header h3 {
+            margin: 0;
+            color: #f39c12;
+            font-size: 1.2rem;
+        }
+
+        .chat-toggle {
+            display: none;
+            background: rgba(243, 156, 18, 0.2);
+            border: none;
+            color: #f39c12;
+            padding: 5px 10px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: rgba(243, 156, 18, 0.3);
+            border-radius: 3px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: rgba(243, 156, 18, 0.5);
+        }
+
+        .chat-message {
+            display: flex;
+            gap: 10px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .chat-message.own {
+            flex-direction: row-reverse;
+        }
+
+        .chat-message.own .message-content {
+            background: rgba(243, 156, 18, 0.2);
+            border-color: rgba(243, 156, 18, 0.3);
+        }
+
+        .chat-message.system {
+            justify-content: center;
+        }
+
+        .chat-message.system .message-content {
+            background: rgba(52, 152, 219, 0.1);
+            border-color: rgba(52, 152, 219, 0.3);
+            color: #3498db;
+            font-style: italic;
+            font-size: 0.9rem;
+        }
+
+        .message-avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            border: 2px solid rgba(243, 156, 18, 0.5);
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            word-wrap: break-word;
+        }
+
+        .message-author {
+            font-weight: 600;
+            color: #f39c12;
+            font-size: 0.85rem;
+            margin-bottom: 3px;
+        }
+
+        .message-text {
+            color: #ecf0f1;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+
+        .message-time {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 3px;
+        }
+
+        .chat-input-container {
+            padding: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 25px;
+            color: white;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        .chat-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: #f39c12;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .chat-send-btn {
+            padding: 10px 20px;
+            background: linear-gradient(45deg, #e74c3c, #f39c12);
+            border: none;
+            border-radius: 25px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .chat-send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(243, 156, 18, 0.4);
+        }
+
+        .chat-send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Mobile Chat Styles */
+        .mobile-chat-toggle {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(45deg, #e74c3c, #f39c12);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            transition: all 0.3s ease;
+        }
+
+        .mobile-chat-toggle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .chat-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #e74c3c;
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 10px;
@@ -868,6 +1123,10 @@
             .sign-out-btn {
                 padding: 6px 12px;
                 font-size: 0.8rem;
+            }
+            
+            .game-layout {
+                flex-direction: column;
             }
             
             .game-table {
@@ -1043,6 +1302,40 @@
             .game-table {
                 padding-bottom: 100px;
             }
+            
+            /* Mobile chat styles */
+            .chat-container {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                width: 100%;
+                height: 100%;
+                max-width: none;
+                border-radius: 0;
+                z-index: 200;
+            }
+            
+            .chat-container.mobile-visible {
+                display: flex;
+            }
+            
+            .mobile-chat-toggle {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                bottom: 90px;
+            }
+            
+            .chat-header {
+                padding: 20px;
+            }
+            
+            .chat-toggle {
+                display: block;
+            }
         }
 
         /* Tablet specific adjustments */
@@ -1069,6 +1362,11 @@
             
             .pot-info {
                 margin: 20px 0;
+            }
+            
+            .chat-container {
+                width: 300px;
+                height: 500px;
             }
         }
 
@@ -1171,6 +1469,13 @@
             .hand-guide {
                 display: none;
             }
+            
+            .mobile-chat-toggle {
+                bottom: 70px;
+                width: 50px;
+                height: 50px;
+                font-size: 1.2rem;
+            }
         }
 
         /* Notch/Safe area support for modern phones */
@@ -1185,6 +1490,11 @@
                     bottom: max(20px, env(safe-area-inset-bottom));
                     left: max(10px, env(safe-area-inset-left));
                     right: max(10px, env(safe-area-inset-right));
+                }
+                
+                .mobile-chat-toggle {
+                    bottom: max(90px, calc(70px + env(safe-area-inset-bottom)));
+                    right: max(20px, env(safe-area-inset-right));
                 }
             }
         }
@@ -1230,74 +1540,97 @@
             </div>
         </div>
 
-        <div class="game-table" id="gameTable" style="display: none;">
-            <div class="user-info" style="position: relative; margin-bottom: 20px;">
-                <img class="user-avatar" id="gameUserAvatar" src="" alt="Avatar" onerror="this.src='https://www.gravatar.com/avatar/?d=mp&s=200'">
-                <span class="user-name" id="gameUserName"></span>
-                <button class="sign-out-btn" onclick="leaveGame()">Leave Game</button>
-            </div>
-            <div class="room-code" id="roomCodeDisplay"></div>
-            
-            <div class="players-container">
-                <div class="player-slot" id="player1">
-                    <div class="position-indicator" style="display: none;"></div>
-                    <div class="player-name">Waiting for player...</div>
-                    <div class="player-chips"></div>
-                    <div class="player-hand-rank" style="display: none;"></div>
-                    <div class="player-cards"></div>
-                </div>
-                <div class="player-slot" id="player2">
-                    <div class="position-indicator" style="display: none;"></div>
-                    <div class="player-name">Waiting for player...</div>
-                    <div class="player-chips"></div>
-                    <div class="player-hand-rank" style="display: none;"></div>
-                    <div class="player-cards"></div>
-                </div>
-            </div>
+        <div class="game-container" id="gameContainer" style="display: none;">
+            <div class="game-layout">
+                <div class="game-main">
+                    <div class="game-table" id="gameTable">
+                        <div class="user-info" style="position: relative; margin-bottom: 20px;">
+                            <img class="user-avatar" id="gameUserAvatar" src="" alt="Avatar" onerror="this.src='https://www.gravatar.com/avatar/?d=mp&s=200'">
+                            <span class="user-name" id="gameUserName"></span>
+                            <button class="sign-out-btn" onclick="leaveGame()">Leave Game</button>
+                        </div>
+                        <div class="room-code" id="roomCodeDisplay"></div>
+                        
+                        <div class="players-container">
+                            <div class="player-slot" id="player1">
+                                <div class="position-indicator" style="display: none;"></div>
+                                <div class="player-name">Waiting for player...</div>
+                                <div class="player-chips"></div>
+                                <div class="player-hand-rank" style="display: none;"></div>
+                                <div class="player-cards"></div>
+                            </div>
+                            <div class="player-slot" id="player2">
+                                <div class="position-indicator" style="display: none;"></div>
+                                <div class="player-name">Waiting for player...</div>
+                                <div class="player-chips"></div>
+                                <div class="player-hand-rank" style="display: none;"></div>
+                                <div class="player-cards"></div>
+                            </div>
+                        </div>
 
-            <div class="pot-info">
-                Pot: <span class="chip-icon"></span> <span id="potAmount">0</span>
-                <div style="font-size: 0.8rem; margin-top: 5px; color: rgba(255, 255, 255, 0.7);">
-                    Blinds: <span id="blindsInfo">25/50</span> • Hand #<span id="handCount">0</span>
-                    <span style="display: block; font-size: 0.7rem; margin-top: 3px;">
-                        (Blinds double every 5 hands)
-                    </span>
+                        <div class="pot-info">
+                            Pot: <span class="chip-icon"></span> <span id="potAmount">0</span>
+                            <div style="font-size: 0.8rem; margin-top: 5px; color: rgba(255, 255, 255, 0.7);">
+                                Blinds: <span id="blindsInfo">25/50</span> • Hand #<span id="handCount">0</span>
+                                <span style="display: block; font-size: 0.7rem; margin-top: 3px;">
+                                    (Blinds double every 5 hands)
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="community-cards" id="communityCards"></div>
+                        
+                        <div class="game-status" id="gameStatus">Waiting for players...</div>
+                        
+                        <div class="hand-guide">
+                            <details>
+                                <summary>Poker Hand Rankings ▼</summary>
+                                <div>
+                                    <div>🔴 <strong>Royal Flush</strong> - A, K, Q, J, 10 (same suit)</div>
+                                    <div>🟠 <strong>Straight Flush</strong> - 5 cards in sequence (same suit)</div>
+                                    <div>🟡 <strong>Four of a Kind</strong> - 4 cards of same rank</div>
+                                    <div>🟢 <strong>Full House</strong> - 3 of a kind + pair</div>
+                                    <div>🔵 <strong>Flush</strong> - 5 cards of same suit</div>
+                                    <div>🟣 <strong>Straight</strong> - 5 cards in sequence</div>
+                                    <div>⚫ <strong>Three of a Kind</strong> - 3 cards of same rank</div>
+                                    <div>⚪ <strong>Two Pair</strong> - 2 pairs</div>
+                                    <div>🔘 <strong>Pair</strong> - 2 cards of same rank</div>
+                                    <div>⭕ <strong>High Card</strong> - Highest card wins</div>
+                                </div>
+                            </details>
+                        </div>
+                        
+                        <div class="action-buttons" id="actionButtons" style="display: none;">
+                            <button class="action-btn btn-fold" onclick="playerAction('fold')">Fold</button>
+                            <button class="action-btn btn-check" onclick="playerAction('check')">Check</button>
+                            <button class="action-btn btn-call" onclick="playerAction('call')">Call</button>
+                            <button class="action-btn btn-raise" onclick="showRaiseInput()">Raise</button>
+                        </div>
+                        
+                        <div class="bet-input" id="betInput" style="display: none;">
+                            <input type="number" id="raiseAmount" min="1" placeholder="Amount" inputmode="numeric" pattern="[0-9]*">
+                            <button class="action-btn btn-raise" onclick="playerAction('raise')">Confirm Raise</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="chat-container" id="chatContainer">
+                    <div class="chat-header">
+                        <h3>Game Chat</h3>
+                        <button class="chat-toggle" onclick="toggleMobileChat()">✕</button>
+                    </div>
+                    <div class="chat-messages" id="chatMessages"></div>
+                    <div class="chat-input-container">
+                        <input type="text" class="chat-input" id="chatInput" placeholder="Type a message..." maxlength="200">
+                        <button class="chat-send-btn" id="chatSendBtn" onclick="sendMessage()">Send</button>
+                    </div>
                 </div>
             </div>
             
-            <div class="community-cards" id="communityCards"></div>
-            
-            <div class="game-status" id="gameStatus">Waiting for players...</div>
-            
-            <div class="hand-guide">
-                <details>
-                    <summary>Poker Hand Rankings ▼</summary>
-                    <div>
-                        <div>🔴 <strong>Royal Flush</strong> - A, K, Q, J, 10 (same suit)</div>
-                        <div>🟠 <strong>Straight Flush</strong> - 5 cards in sequence (same suit)</div>
-                        <div>🟡 <strong>Four of a Kind</strong> - 4 cards of same rank</div>
-                        <div>🟢 <strong>Full House</strong> - 3 of a kind + pair</div>
-                        <div>🔵 <strong>Flush</strong> - 5 cards of same suit</div>
-                        <div>🟣 <strong>Straight</strong> - 5 cards in sequence</div>
-                        <div>⚫ <strong>Three of a Kind</strong> - 3 cards of same rank</div>
-                        <div>⚪ <strong>Two Pair</strong> - 2 pairs</div>
-                        <div>🔘 <strong>Pair</strong> - 2 cards of same rank</div>
-                        <div>⭕ <strong>High Card</strong> - Highest card wins</div>
-                    </div>
-                </details>
-            </div>
-            
-            <div class="action-buttons" id="actionButtons" style="display: none;">
-                <button class="action-btn btn-fold" onclick="playerAction('fold')">Fold</button>
-                <button class="action-btn btn-check" onclick="playerAction('check')">Check</button>
-                <button class="action-btn btn-call" onclick="playerAction('call')">Call</button>
-                <button class="action-btn btn-raise" onclick="showRaiseInput()">Raise</button>
-            </div>
-            
-            <div class="bet-input" id="betInput" style="display: none;">
-                <input type="number" id="raiseAmount" min="1" placeholder="Amount" inputmode="numeric" pattern="[0-9]*">
-                <button class="action-btn btn-raise" onclick="playerAction('raise')">Confirm Raise</button>
-            </div>
+            <button class="mobile-chat-toggle" id="mobileChatToggle" onclick="toggleMobileChat()">
+                💬
+                <span class="chat-badge" id="chatBadge" style="display: none;">0</span>
+            </button>
         </div>
     </div>
 
@@ -1342,6 +1675,8 @@
         let playerName = null;
         let playerPhotoURL = null;
         let gameListener = null;
+        let chatListener = null;
+        let unreadMessages = 0;
 
         // Auth state observer
         auth.onAuthStateChanged((user) => {
@@ -1369,12 +1704,16 @@
                 // User is signed out
                 document.getElementById('loginScreen').style.display = 'flex';
                 document.getElementById('lobby').style.display = 'none';
-                document.getElementById('gameTable').style.display = 'none';
+                document.getElementById('gameContainer').style.display = 'none';
                 
                 // Clean up any active game listeners
                 if (gameListener) {
                     gameListener();
                     gameListener = null;
+                }
+                if (chatListener) {
+                    chatListener();
+                    chatListener = null;
                 }
             }
         });
@@ -1476,7 +1815,12 @@
             try {
                 await db.collection('games').doc(roomCode).set(gameData);
                 console.log('Created new game:', roomCode);
+                
+                // Send system message
+                await sendSystemMessage(roomCode, `${playerName} created the game`);
+                
                 startGameListener(roomCode);
+                startChatListener(roomCode);
                 showGame(roomCode);
             } catch (error) {
                 console.error('Error creating game:', error);
@@ -1526,6 +1870,9 @@
                     folded: false
                 });
 
+                // Send system message
+                await sendSystemMessage(roomCode, `${playerName} joined the game`);
+
                 // If game state is incomplete, initialize missing fields
                 if (!gameData.hasOwnProperty('smallBlind')) {
                     gameData.smallBlind = 25;
@@ -1545,6 +1892,9 @@
                     
                     // Deal cards and post blinds
                     dealCards(gameData);
+                    
+                    // Send system message
+                    await sendSystemMessage(roomCode, 'Game started! Dealing cards...');
                     
                     // Log the state after dealing to debug
                     console.log('After dealing cards and posting blinds:');
@@ -1566,12 +1916,14 @@
                     });
                     
                     startGameListener(roomCode);
+                    startChatListener(roomCode);
                     showGame(roomCode);
                     return;
                 }
 
                 await gameRef.update(gameData);
                 startGameListener(roomCode);
+                startChatListener(roomCode);
                 showGame(roomCode);
             } catch (error) {
                 console.error('Error joining game:', error);
@@ -1685,7 +2037,7 @@
 
         function showGame(roomCode) {
             document.getElementById('lobby').style.display = 'none';
-            document.getElementById('gameTable').style.display = 'block';
+            document.getElementById('gameContainer').style.display = 'block';
             document.getElementById('roomCodeDisplay').textContent = `Room: ${roomCode}`;
             document.getElementById('gameUserName').textContent = playerName;
             document.getElementById('gameUserName').className = 'user-name' + (auth.currentUser && auth.currentUser.isAnonymous ? ' guest' : '');
@@ -1697,6 +2049,15 @@
                 gameListener();
                 gameListener = null;
             }
+            if (chatListener) {
+                chatListener();
+                chatListener = null;
+            }
+            
+            // Send leave message
+            if (currentGame && currentGame.id) {
+                await sendSystemMessage(currentGame.id, `${playerName} left the game`);
+            }
             
             // Clean up any winner announcements
             const announcement = document.querySelector('.winner-announcement');
@@ -1704,10 +2065,15 @@
                 announcement.remove();
             }
             
+            // Reset chat
+            document.getElementById('chatMessages').innerHTML = '';
+            unreadMessages = 0;
+            updateChatBadge();
+            
             // TODO: Optionally remove player from game in Firestore
             
             currentGame = null;
-            document.getElementById('gameTable').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'none';
             document.getElementById('lobby').style.display = 'flex';
             document.getElementById('joinGameSection').style.display = 'none';
             document.getElementById('roomCode').value = '';
@@ -2038,9 +2404,12 @@
                     playersActed: currentGame.playersActed || []
                 };
 
+                let actionMessage = '';
+
                 switch (action) {
                     case 'fold':
                         myPlayer.folded = true;
+                        actionMessage = `${playerName} folded`;
                         // When folding, we still count as having acted
                         if (!updates.playersActed.includes(myPlayerIndex)) {
                             updates.playersActed.push(myPlayerIndex);
@@ -2048,6 +2417,7 @@
                         break;
                         
                     case 'check':
+                        actionMessage = `${playerName} checked`;
                         // No chips to add to pot
                         break;
                         
@@ -2058,6 +2428,12 @@
                         myPlayer.chips -= actualCallAmount;
                         myPlayer.bet += actualCallAmount;
                         updates.pot = (updates.pot || 0) + actualCallAmount;
+                        
+                        if (actualCallAmount >= myPlayer.chips) {
+                            actionMessage = `${playerName} went all-in with ${actualCallAmount} chips`;
+                        } else {
+                            actionMessage = `${playerName} called ${actualCallAmount}`;
+                        }
                         break;
                         
                     case 'raise':
@@ -2075,6 +2451,7 @@
                             myPlayer.bet = currentGame.currentBet + raiseAmount;
                             updates.pot = (updates.pot || 0) + totalCost;
                             updates.currentBet = myPlayer.bet;
+                            actionMessage = `${playerName} raised to ${updates.currentBet}`;
                             // When someone raises, only they have acted in this betting round
                             updates.playersActed = [myPlayerIndex];
                         } else {
@@ -2084,6 +2461,11 @@
                         document.getElementById('betInput').style.display = 'none';
                         document.getElementById('raiseAmount').value = '';
                         break;
+                }
+
+                // Send action message to chat
+                if (actionMessage) {
+                    await sendSystemMessage(currentGame.id, actionMessage);
                 }
 
                 // Track that this player has acted (unless they raised, or already acted for fold)
@@ -2151,7 +2533,7 @@
             return allActivePlayersActed && allMatched;
         }
 
-        function advanceStage(gameData) {
+        async function advanceStage(gameData) {
             console.log('Advancing stage from:', gameData.stage);
             
             // Reset bets and players acted for new betting round
@@ -2164,7 +2546,7 @@
             // If only one player remains, they win
             if (activePlayers.length === 1) {
                 gameData.stage = 'showdown';
-                determineWinner(gameData);
+                await determineWinner(gameData);
                 return;
             }
             
@@ -2184,6 +2566,8 @@
                 attempts++;
             }
             
+            let stageMessage = '';
+            
             switch (gameData.stage) {
                 case 'preflop':
                     gameData.stage = 'flop';
@@ -2191,6 +2575,7 @@
                     for (let i = 0; i < 3; i++) {
                         gameData.communityCards.push(gameData.deck.pop());
                     }
+                    stageMessage = '🃏 Dealing the flop...';
                     console.log('Dealt flop:', gameData.communityCards.slice(0, 3));
                     break;
                     
@@ -2198,6 +2583,7 @@
                     gameData.stage = 'turn';
                     // Deal 1 card
                     gameData.communityCards.push(gameData.deck.pop());
+                    stageMessage = '🃏 Dealing the turn...';
                     console.log('Dealt turn:', gameData.communityCards[3]);
                     break;
                     
@@ -2205,13 +2591,20 @@
                     gameData.stage = 'river';
                     // Deal 1 card
                     gameData.communityCards.push(gameData.deck.pop());
+                    stageMessage = '🃏 Dealing the river...';
                     console.log('Dealt river:', gameData.communityCards[4]);
                     break;
                     
                 case 'river':
                     gameData.stage = 'showdown';
-                    determineWinner(gameData);
+                    stageMessage = '🎯 Showdown!';
+                    await determineWinner(gameData);
                     break;
+            }
+            
+            // Send stage message to chat
+            if (stageMessage && currentGame && currentGame.id) {
+                await sendSystemMessage(currentGame.id, stageMessage);
             }
             
             console.log('Advanced to stage:', gameData.stage, 'Current player:', gameData.currentPlayer);
@@ -2231,6 +2624,11 @@
                     amount: gameData.pot,
                     hand: 'Everyone folded'
                 };
+                
+                // Send winner message
+                if (currentGame && currentGame.id) {
+                    await sendSystemMessage(currentGame.id, `🏆 ${winner.name} wins ${gameData.pot} chips (everyone folded)`);
+                }
                 
                 // Check for bankruptcy
                 await checkForBankruptcy(gameData);
@@ -2256,6 +2654,11 @@
                     hand: playerHands[0].hand.name
                 };
                 
+                // Send winner message
+                if (currentGame && currentGame.id) {
+                    await sendSystemMessage(currentGame.id, `🏆 ${winner.name} wins ${gameData.pot} chips with ${playerHands[0].hand.name}`);
+                }
+                
                 // Check for bankruptcy
                 await checkForBankruptcy(gameData);
             }
@@ -2267,6 +2670,11 @@
             if (bankruptPlayer) {
                 // Someone is bankrupt - show final winner
                 const winner = gameData.players.find(p => p.chips > 0);
+                
+                // Send game over message
+                if (currentGame && currentGame.id) {
+                    await sendSystemMessage(currentGame.id, `💥 GAME OVER! ${winner.name} wins! ${bankruptPlayer.name} went bankrupt!`);
+                }
                 
                 // Update Firestore first
                 const gameRef = db.collection('games').doc(currentGame.id);
@@ -2302,6 +2710,11 @@
                     
                     // Reset the game state for new hand
                     resetGame(freshGameData);
+                    
+                    // Send new hand message
+                    if (currentGame && currentGame.id) {
+                        await sendSystemMessage(currentGame.id, `🎲 Starting hand #${freshGameData.handCount}! Blinds: ${freshGameData.smallBlind}/${freshGameData.bigBlind}`);
+                    }
                     
                     console.log('After resetGame and dealCards for new hand:');
                     console.log('Player 0:', freshGameData.players[0].name, 'Chips:', freshGameData.players[0].chips, 'Bet:', freshGameData.players[0].bet);
@@ -2347,7 +2760,7 @@
             document.body.appendChild(announcement);
         }
         
-        function startNewMatch() {
+        async function startNewMatch() {
             // Close the announcement
             const announcement = document.querySelector('.winner-announcement');
             if (announcement) {
@@ -2382,6 +2795,9 @@
                 
                 // Deal cards and post blinds for the new game
                 dealCards(currentGame);
+                
+                // Send new game message
+                await sendSystemMessage(currentGame.id, '🎮 New game started! Each player has 5000 chips.');
                 
                 console.log('Starting new match after bankruptcy:');
                 console.log('Player 0:', currentGame.players[0].name, 'Chips:', currentGame.players[0].chips, 'Bet:', currentGame.players[0].bet);
@@ -2676,6 +3092,9 @@
                 // Reset the game state for new hand
                 resetGame(gameData);
                 
+                // Send new hand message
+                await sendSystemMessage(currentGame.id, `🎲 Starting hand #${gameData.handCount}! Blinds: ${gameData.smallBlind}/${gameData.bigBlind}`);
+                
                 // Update Firestore with the new game state
                 await gameRef.update({
                     players: gameData.players,
@@ -2698,42 +3117,155 @@
                 alert('Error dealing new hand. Please try again.');
             }
         }
-        
-        // Initialize app
-        window.addEventListener('load', () => {
-            // Show mobile hint
-            if (isMobile) {
-                const mobileHint = document.querySelector('.mobile-hint');
-                if (mobileHint) {
-                    mobileHint.style.display = 'block';
-                }
-                
-                // Add viewport meta tag for better mobile experience
-                if (!document.querySelector('meta[name="viewport"]')) {
-                    const viewport = document.createElement('meta');
-                    viewport.name = 'viewport';
-                    viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-                    document.head.appendChild(viewport);
-                }
-                
-                // Prevent double-tap zoom on iOS
-                let lastTouchEnd = 0;
-                document.addEventListener('touchend', (e) => {
-                    const now = Date.now();
-                    if (now - lastTouchEnd <= 300) {
-                        e.preventDefault();
-                    }
-                    lastTouchEnd = now;
-                }, false);
+
+        // Chat functionality
+        function startChatListener(roomCode) {
+            if (chatListener) {
+                chatListener();
+            }
+
+            console.log('Starting chat listener for room:', roomCode);
+            
+            chatListener = db.collection('games').doc(roomCode).collection('messages')
+                .orderBy('timestamp', 'asc')
+                .onSnapshot((snapshot) => {
+                    snapshot.docChanges().forEach((change) => {
+                        if (change.type === 'added') {
+                            const message = change.doc.data();
+                            displayMessage(message);
+                            
+                            // Update unread count if chat is hidden and message is not from current user
+                            if (isMobile && !document.getElementById('chatContainer').classList.contains('mobile-visible') && 
+                                message.userId !== playerId) {
+                                unreadMessages++;
+                                updateChatBadge();
+                            }
+                        }
+                    });
+                }, (error) => {
+                    console.error('Error listening to chat updates:', error);
+                });
+        }
+
+        function displayMessage(message) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageEl = document.createElement('div');
+            
+            const isOwn = message.userId === playerId;
+            const isSystem = message.type === 'system';
+            
+            messageEl.className = `chat-message ${isOwn ? 'own' : ''} ${isSystem ? 'system' : ''}`;
+            
+            if (isSystem) {
+                messageEl.innerHTML = `
+                    <div class="message-content">
+                        <div class="message-text">${message.text}</div>
+                        <div class="message-time">${formatTime(message.timestamp)}</div>
+                    </div>
+                `;
+            } else {
+                messageEl.innerHTML = `
+                    ${!isOwn ? `<img class="message-avatar" src="${message.userAvatar}" onerror="this.src='https://www.gravatar.com/avatar/?d=mp&s=200'">` : ''}
+                    <div class="message-content">
+                        <div class="message-author">${message.userName}</div>
+                        <div class="message-text">${message.text}</div>
+                        <div class="message-time">${formatTime(message.timestamp)}</div>
+                    </div>
+                    ${isOwn ? `<img class="message-avatar" src="${message.userAvatar}" onerror="this.src='https://www.gravatar.com/avatar/?d=mp&s=200'">` : ''}
+                `;
             }
             
-            // Handle orientation change
-            window.addEventListener('orientationchange', () => {
+            messagesContainer.appendChild(messageEl);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function formatTime(timestamp) {
+            if (!timestamp) return '';
+            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            return `${hours}:${minutes}`;
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const text = input.value.trim();
+            
+            if (!text || !currentGame || !currentGame.id) return;
+            
+            try {
+                await db.collection('games').doc(currentGame.id).collection('messages').add({
+                    text: text,
+                    userId: playerId,
+                    userName: playerName,
+                    userAvatar: playerPhotoURL,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    type: 'user'
+                });
+                
+                input.value = '';
+            } catch (error) {
+                console.error('Error sending message:', error);
+            }
+        }
+
+        async function sendSystemMessage(roomCode, text) {
+            if (!roomCode) return;
+            
+            try {
+                await db.collection('games').doc(roomCode).collection('messages').add({
+                    text: text,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    type: 'system'
+                });
+            } catch (error) {
+                console.error('Error sending system message:', error);
+            }
+        }
+
+        function toggleMobileChat() {
+            const chatContainer = document.getElementById('chatContainer');
+            const isVisible = chatContainer.classList.contains('mobile-visible');
+            
+            if (isVisible) {
+                chatContainer.classList.remove('mobile-visible');
+            } else {
+                chatContainer.classList.add('mobile-visible');
+                // Reset unread count
+                unreadMessages = 0;
+                updateChatBadge();
+                // Focus input
                 setTimeout(() => {
-                    window.scrollTo(0, 0);
+                    document.getElementById('chatInput').focus();
                 }, 100);
+            }
+        }
+
+        function updateChatBadge() {
+            const badge = document.getElementById('chatBadge');
+            if (unreadMessages > 0) {
+                badge.textContent = unreadMessages > 9 ? '9+' : unreadMessages;
+                badge.style.display = 'flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        // Chat input handling
+        document.addEventListener('DOMContentLoaded', () => {
+            const chatInput = document.getElementById('chatInput');
+            const chatSendBtn = document.getElementById('chatSendBtn');
+            
+            // Send message on Enter
+            chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+            
+            // Update send button state
+            chatInput.addEventListener('input', () => {
+                chatSendBtn.disabled = !chatInput.value.trim();
             });
         });
-    </script>
-</body>
-</html>
