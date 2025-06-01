@@ -1,4 +1,5 @@
-<!DOCTYPE html>
+
+        }<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -241,6 +242,18 @@
             font-size: 0.9rem;
             box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
             z-index: 10;
+            animation: rotateIn 0.5s ease-out;
+        }
+        
+        @keyframes rotateIn {
+            from {
+                transform: rotate(-180deg) scale(0);
+                opacity: 0;
+            }
+            to {
+                transform: rotate(0) scale(1);
+                opacity: 1;
+            }
         }
 
         .position-indicator.dealer {
@@ -1465,13 +1478,39 @@
                 gameListener();
             }
 
+            console.log('Starting game listener for room:', roomCode);
+            
             gameListener = db.collection('games').doc(roomCode)
                 .onSnapshot((doc) => {
                     if (doc.exists) {
-                        currentGame = doc.data();
+                        const newGameData = doc.data();
+                        const previousStage = currentGame ? currentGame.stage : null;
+                        const previousHandCount = currentGame ? currentGame.handCount : 0;
+                        
+                        currentGame = newGameData;
                         currentGame.id = roomCode;
+                        
+                        // Log stage transitions
+                        if (previousStage !== currentGame.stage) {
+                            console.log('Game stage changed from', previousStage, 'to', currentGame.stage);
+                        }
+                        
+                        // Check if a new hand started
+                        if (previousHandCount && currentGame.handCount > previousHandCount) {
+                            console.log('New hand started! Hand #', currentGame.handCount);
+                            const gameTable = document.getElementById('gameTable');
+                            gameTable.classList.add('new-hand');
+                            setTimeout(() => {
+                                gameTable.classList.remove('new-hand');
+                            }, 1000);
+                        }
+                        
                         updateGameUI();
+                    } else {
+                        console.log('Game document does not exist');
                     }
+                }, (error) => {
+                    console.error('Error listening to game updates:', error);
                 });
         }
 
@@ -1508,13 +1547,21 @@
         function updateGameUI() {
             if (!currentGame) return;
 
+            console.log('Updating UI - Current game state:', {
+                stage: currentGame.stage,
+                pot: currentGame.pot,
+                currentPlayer: currentGame.currentPlayer,
+                player0: currentGame.players[0] ? currentGame.players[0].name : 'none',
+                player1: currentGame.players[1] ? currentGame.players[1].name : 'none'
+            });
+
             // Update players
             currentGame.players.forEach((player, index) => {
                 const playerSlot = document.getElementById(`player${index + 1}`);
                 const isCurrentPlayer = index === currentGame.currentPlayer;
                 const isMe = player.id === playerId;
                 
-                playerSlot.classList.toggle('current-player', isCurrentPlayer && currentGame.stage !== 'waiting');
+                playerSlot.classList.toggle('current-player', isCurrentPlayer && currentGame.stage !== 'waiting' && currentGame.stage !== 'showdown');
                 playerSlot.classList.toggle('active', isMe);
                 playerSlot.style.opacity = player.folded ? '0.5' : '1';
                 
@@ -1613,23 +1660,24 @@
             const communityContainer = document.getElementById('communityCards');
             communityContainer.innerHTML = '';
             
-            currentGame.communityCards.forEach(card => {
-                const cardEl = document.createElement('div');
-                cardEl.className = `card ${suitColors[card.suit]}`;
-                cardEl.textContent = `${card.rank}${card.suit}`;
-                communityContainer.appendChild(cardEl);
-            });
+            // Clear any leftover cards during waiting or new hand
+            if (currentGame.stage === 'waiting' || 
+                (currentGame.stage === 'preflop' && (!currentGame.communityCards || currentGame.communityCards.length === 0))) {
+                communityContainer.innerHTML = '';
+            } else if (currentGame.communityCards) {
+                currentGame.communityCards.forEach(card => {
+                    const cardEl = document.createElement('div');
+                    cardEl.className = `card ${suitColors[card.suit]}`;
+                    cardEl.textContent = `${card.rank}${card.suit}`;
+                    communityContainer.appendChild(cardEl);
+                });
+            }
 
             // Update game status
             updateGameStatus();
 
             // Update action buttons
             updateActionButtons();
-            
-            // Auto-continue after showdown (unless game is over)
-            if (currentGame.stage === 'showdown' && currentGame.lastWinner && !currentGame.players.some(p => p.chips === 0)) {
-                // Already handled in determineWinner/checkForBankruptcy
-            }
         }
 
         function updateGameStatus() {
@@ -1642,7 +1690,7 @@
             } else if (currentGame.stage === 'showdown') {
                 // Show who won during showdown
                 if (currentGame.lastWinner) {
-                    statusEl.innerHTML = `<strong style="color: #f39c12;">${currentGame.lastWinner.name} wins ${currentGame.lastWinner.amount} chips with ${currentGame.lastWinner.hand}!</strong>`;
+                    statusEl.innerHTML = `<strong style="color: #f39c12;">${currentGame.lastWinner.name} wins ${currentGame.lastWinner.amount} chips with ${currentGame.lastWinner.hand}!</strong><br><small style="color: #ecf0f1;">New hand starting in 3 seconds...</small>`;
                 } else {
                     statusEl.textContent = 'Showdown!';
                 }
@@ -1668,8 +1716,10 @@
                 
                 const stageName = stageNames[currentGame.stage] || currentGame.stage;
                 
-                // Check if blinds were just posted (pre-flop with pot > 0)
-                if (currentGame.stage === 'preflop' && currentGame.pot > 0 && (!currentGame.communityCards || currentGame.communityCards.length === 0)) {
+                // Check if blinds were just posted (pre-flop with pot > 0 and no community cards and no players have acted beyond blinds)
+                if (currentGame.stage === 'preflop' && currentGame.pot > 0 && 
+                    (!currentGame.communityCards || currentGame.communityCards.length === 0) &&
+                    (!currentGame.playersActed || currentGame.playersActed.length === 0)) {
                     const blindsPosted = `<small style="color: #f39c12;">💰 Blinds posted: ${currentGame.smallBlind}/${currentGame.bigBlind}</small><br>`;
                     if (isMyTurn) {
                         statusEl.innerHTML = blindsPosted + `<strong>${stageName}</strong> - ${isMobile ? '👆 ' : ''}Your turn to act`;
@@ -1686,7 +1736,11 @@
                 
                 // Show current bet if any
                 if (currentGame.currentBet > 0) {
-                    statusEl.innerHTML += ` (To call: ${currentGame.currentBet})`;
+                    const myPlayer = currentGame.players.find(p => p.id === playerId);
+                    const callAmount = currentGame.currentBet - (myPlayer ? myPlayer.bet : 0);
+                    if (callAmount > 0) {
+                        statusEl.innerHTML += ` (To call: ${callAmount})`;
+                    }
                 }
                 
                 // Show blind increase warning
@@ -1696,8 +1750,8 @@
                     statusEl.innerHTML += '<br><small style="color: #f39c12;">📈 Blinds just increased!</small>';
                 }
                 
-                // Show last winner info if this is a new hand
-                if (currentGame.lastWinner && currentGame.stage === 'preflop' && (!currentGame.communityCards || currentGame.communityCards.length === 0)) {
+                // Show last winner info if this is a new hand (but not during the same hand)
+                if (currentGame.lastWinner && currentGame.stage === 'preflop' && currentGame.pot > 0 && currentGame.pot <= (currentGame.smallBlind + currentGame.bigBlind)) {
                     statusEl.innerHTML = `<small style="color: #f39c12;">Last hand: ${currentGame.lastWinner.name} won ${currentGame.lastWinner.amount} chips</small><br>` + statusEl.innerHTML;
                 }
             }
@@ -1911,17 +1965,12 @@
         }
 
         function advanceStage(gameData) {
+            console.log('Advancing stage from:', gameData.stage);
+            
             // Reset bets and players acted for new betting round
             gameData.players.forEach(p => p.bet = 0);
             gameData.currentBet = 0;
             gameData.playersActed = [];
-            
-            // Post-flop, big blind (player 1) acts first
-            if (gameData.stage !== 'preflop' && gameData.players.length === 2) {
-                gameData.currentPlayer = 1;
-            } else {
-                gameData.currentPlayer = 0;
-            }
             
             const activePlayers = gameData.players.filter(p => !p.folded);
             
@@ -1932,6 +1981,22 @@
                 return;
             }
             
+            // Set current player based on stage
+            if (gameData.stage === 'preflop') {
+                // Moving from preflop to flop - BB acts first (player 1 in heads-up)
+                gameData.currentPlayer = 1;
+            } else {
+                // For all other streets, BB continues to act first
+                gameData.currentPlayer = 1;
+            }
+            
+            // Skip to active player if current player has folded
+            let attempts = 0;
+            while (gameData.players[gameData.currentPlayer].folded && attempts < gameData.players.length) {
+                gameData.currentPlayer = (gameData.currentPlayer + 1) % gameData.players.length;
+                attempts++;
+            }
+            
             switch (gameData.stage) {
                 case 'preflop':
                     gameData.stage = 'flop';
@@ -1939,18 +2004,21 @@
                     for (let i = 0; i < 3; i++) {
                         gameData.communityCards.push(gameData.deck.pop());
                     }
+                    console.log('Dealt flop:', gameData.communityCards.slice(0, 3));
                     break;
                     
                 case 'flop':
                     gameData.stage = 'turn';
                     // Deal 1 card
                     gameData.communityCards.push(gameData.deck.pop());
+                    console.log('Dealt turn:', gameData.communityCards[3]);
                     break;
                     
                 case 'turn':
                     gameData.stage = 'river';
                     // Deal 1 card
                     gameData.communityCards.push(gameData.deck.pop());
+                    console.log('Dealt river:', gameData.communityCards[4]);
                     break;
                     
                 case 'river':
@@ -1958,6 +2026,8 @@
                     determineWinner(gameData);
                     break;
             }
+            
+            console.log('Advanced to stage:', gameData.stage, 'Current player:', gameData.currentPlayer);
         }
 
         async function determineWinner(gameData) {
@@ -2023,17 +2093,32 @@
                 // Then show the winner popup
                 showFinalWinner(winner, bankruptPlayer);
             } else {
-                // No one bankrupt - continue to next hand
+                // No one bankrupt - show a brief winner message then continue to next hand
+                console.log('Hand complete - Winner:', gameData.lastWinner.name, 'won', gameData.lastWinner.amount);
+                
+                // Update to showdown state first to display the winner
+                const gameRef = db.collection('games').doc(currentGame.id);
+                await gameRef.update({
+                    players: gameData.players,
+                    stage: 'showdown',
+                    lastWinner: gameData.lastWinner,
+                    pot: gameData.pot
+                });
+                
+                // Wait 3 seconds then start new hand
                 setTimeout(async () => {
+                    console.log('Starting new hand after 3 second delay...');
+                    
+                    // Reset the game state for new hand
                     resetGame(gameData);
                     
                     console.log('After resetGame and dealCards for new hand:');
                     console.log('Player 0:', gameData.players[0].name, 'Chips:', gameData.players[0].chips, 'Bet:', gameData.players[0].bet);
                     console.log('Player 1:', gameData.players[1].name, 'Chips:', gameData.players[1].chips, 'Bet:', gameData.players[1].bet);
                     console.log('Pot:', gameData.pot, 'Current Bet:', gameData.currentBet);
+                    console.log('Stage:', gameData.stage, 'Current Player:', gameData.currentPlayer);
                     
                     // Update Firestore with the new game state including pot with blinds
-                    const gameRef = db.collection('games').doc(currentGame.id);
                     await gameRef.update({
                         players: gameData.players,
                         deck: gameData.deck,
@@ -2048,6 +2133,8 @@
                         bigBlind: gameData.bigBlind,
                         lastWinner: gameData.lastWinner
                     });
+                    
+                    console.log('Firestore updated with new hand data');
                 }, 3000); // 3 second delay to see the showdown
             }
         }
@@ -2348,10 +2435,14 @@
         }
 
         function resetGame(gameData) {
+            console.log('=== RESETTING GAME FOR NEW HAND ===');
+            console.log('Before rotation - Player 0:', gameData.players[0].name, 'Player 1:', gameData.players[1].name);
+            
             // Rotate dealer position (swap players for heads-up)
             if (gameData.players.length === 2) {
                 // Swap player positions to rotate dealer/blinds
                 [gameData.players[0], gameData.players[1]] = [gameData.players[1], gameData.players[0]];
+                console.log('After rotation - Player 0 (new SB/Dealer):', gameData.players[0].name, 'Player 1 (new BB):', gameData.players[1].name);
             }
             
             // Reset for next hand
@@ -2373,6 +2464,7 @@
             const bankruptPlayer = gameData.players.find(p => p.chips === 0);
             if (!bankruptPlayer) {
                 dealCards(gameData);
+                console.log('New hand dealt - Pot after blinds:', gameData.pot);
             }
         }
         // Initialize app
