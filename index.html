@@ -1082,7 +1082,7 @@
             <div class="pot-info">
                 Pot: <span class="chip-icon"></span> <span id="potAmount">0</span>
                 <div style="font-size: 0.8rem; margin-top: 5px; color: rgba(255, 255, 255, 0.7);">
-                    Blinds: <span id="blindsInfo">25/50</span> • Hand #<span id="handCount">1</span>
+                    Blinds: <span id="blindsInfo">25/50</span> • Hand #<span id="handCount">0</span>
                     <span style="display: block; font-size: 0.7rem; margin-top: 3px;">
                         (Blinds double every 5 hands)
                     </span>
@@ -1349,16 +1349,37 @@
                     folded: false
                 });
 
+                // If game state is incomplete, initialize missing fields
+                if (!gameData.hasOwnProperty('smallBlind')) {
+                    gameData.smallBlind = 25;
+                    gameData.bigBlind = 50;
+                    gameData.handCount = 0;
+                }
+                
                 if (gameData.players.length === 2) {
                     gameData.stage = 'preflop';
-                    gameData.currentPlayer = 0; // First player starts
+                    gameData.currentPlayer = 0;
                     gameData.playersActed = [];
                     gameData.currentBet = 0;
                     gameData.pot = 0;
-                    gameData.handCount = 0;
+                    gameData.handCount = gameData.handCount || 0;
                     gameData.smallBlind = gameData.smallBlind || 25;
                     gameData.bigBlind = gameData.bigBlind || 50;
                     dealCards(gameData);
+                    
+                    // Update the pot after dealing cards and posting blinds
+                    await gameRef.update({
+                        players: gameData.players,
+                        stage: gameData.stage,
+                        pot: gameData.pot,
+                        currentBet: gameData.currentBet,
+                        deck: gameData.deck,
+                        handCount: gameData.handCount,
+                        playersActed: gameData.playersActed,
+                        smallBlind: gameData.smallBlind,
+                        bigBlind: gameData.bigBlind
+                    });
+                    return;
                 }
 
                 await gameRef.update(gameData);
@@ -1390,6 +1411,9 @@
                 gameData.players[i].folded = false;
             }
             
+            // Reset pot before posting blinds
+            gameData.pot = 0;
+            
             // Post blinds (for 2 players: player 0 is small blind/dealer, player 1 is big blind)
             const smallBlindPlayer = gameData.players[0];
             const bigBlindPlayer = gameData.players[1];
@@ -1398,7 +1422,7 @@
             const smallBlindAmount = Math.min(gameData.smallBlind, smallBlindPlayer.chips);
             smallBlindPlayer.chips -= smallBlindAmount;
             smallBlindPlayer.bet = smallBlindAmount;
-            gameData.pot = smallBlindAmount;
+            gameData.pot += smallBlindAmount;
             
             // Post big blind (all-in if necessary)
             const bigBlindAmount = Math.min(gameData.bigBlind, bigBlindPlayer.chips);
@@ -1502,8 +1526,11 @@
                 if (player.chips === 0) {
                     chipsEl.innerHTML = `<span class="chip-icon"></span> <span style="color: #e74c3c; font-weight: bold;">BANKRUPT</span>`;
                 } else {
-                    chipsEl.innerHTML = `<span class="chip-icon"></span> ${player.chips}` + 
-                        (player.bet > 0 ? ` (Bet: ${player.bet})` : '');
+                    let chipDisplay = `<span class="chip-icon"></span> ${player.chips}`;
+                    if (player.bet > 0) {
+                        chipDisplay += ` <span style="color: #f39c12;">(Bet: ${player.bet})</span>`;
+                    }
+                    chipsEl.innerHTML = chipDisplay;
                 }
                 
                 // Update hand rank display
@@ -1513,7 +1540,7 @@
                     if (isMe || currentGame.stage === 'showdown') {
                         let handEval;
                         
-                        if (currentGame.communityCards.length === 0) {
+                        if (!currentGame.communityCards || currentGame.communityCards.length === 0) {
                             // Pre-flop: evaluate hole cards only
                             handEval = evaluateHoleCards(player.cards);
                         } else {
@@ -1632,12 +1659,14 @@
                 
                 // Show current bet if any
                 if (currentGame.currentBet > 0) {
-                    statusEl.innerHTML += ` (Current bet: ${currentGame.currentBet})`;
+                    statusEl.innerHTML += ` (To call: ${currentGame.currentBet})`;
                 }
                 
                 // Show blind increase warning
                 if (currentGame.handCount && currentGame.handCount % 5 === 4) {
                     statusEl.innerHTML += '<br><small style="color: #e74c3c;">⚠️ Blinds will increase next hand!</small>';
+                } else if (currentGame.handCount && currentGame.handCount % 5 === 1 && currentGame.stage === 'preflop') {
+                    statusEl.innerHTML += '<br><small style="color: #f39c12;">📈 Blinds just increased!</small>';
                 }
                 
                 // Show last winner info if this is a new hand
@@ -1751,7 +1780,7 @@
                         break;
                         
                     case 'check':
-                        // No action needed for chips
+                        // No chips to add to pot
                         break;
                         
                     case 'call':
@@ -1760,7 +1789,7 @@
                         
                         myPlayer.chips -= actualCallAmount;
                         myPlayer.bet += actualCallAmount;
-                        updates.pot += actualCallAmount;
+                        updates.pot = (updates.pot || 0) + actualCallAmount;
                         break;
                         
                     case 'raise':
@@ -1776,7 +1805,7 @@
                         if (totalCost <= myPlayer.chips) {
                             myPlayer.chips -= totalCost;
                             myPlayer.bet = currentGame.currentBet + raiseAmount;
-                            updates.pot += totalCost;
+                            updates.pot = (updates.pot || 0) + totalCost;
                             updates.currentBet = myPlayer.bet;
                             // When someone raises, only they have acted in this betting round
                             updates.playersActed = [myPlayerIndex];
@@ -1960,7 +1989,8 @@
                 await gameRef.update({
                     players: gameData.players,
                     stage: 'gameover',
-                    lastWinner: gameData.lastWinner
+                    lastWinner: gameData.lastWinner,
+                    pot: gameData.pot
                 });
                 
                 // Then show the winner popup
@@ -1970,9 +2000,22 @@
                 setTimeout(async () => {
                     resetGame(gameData);
                     
-                    // Update Firestore
+                    // Update Firestore with the new game state including pot with blinds
                     const gameRef = db.collection('games').doc(currentGame.id);
-                    await gameRef.update(gameData);
+                    await gameRef.update({
+                        players: gameData.players,
+                        deck: gameData.deck,
+                        communityCards: gameData.communityCards,
+                        pot: gameData.pot,
+                        currentBet: gameData.currentBet,
+                        currentPlayer: gameData.currentPlayer,
+                        stage: gameData.stage,
+                        playersActed: gameData.playersActed,
+                        handCount: gameData.handCount,
+                        smallBlind: gameData.smallBlind,
+                        bigBlind: gameData.bigBlind,
+                        lastWinner: gameData.lastWinner
+                    });
                 }, 3000); // 3 second delay to see the showdown
             }
         }
@@ -2011,6 +2054,7 @@
                 currentGame.smallBlind = 25;
                 currentGame.bigBlind = 50;
                 currentGame.handCount = 0;
+                currentGame.pot = 0;
                 
                 // Clear the last winner and reset stage
                 currentGame.lastWinner = null;
@@ -2019,9 +2063,22 @@
                 // Reset game state
                 resetGame(currentGame);
                 
-                // Update the game in Firestore
+                // Update the game in Firestore with all fields
                 const gameRef = db.collection('games').doc(currentGame.id);
-                gameRef.update(currentGame);
+                gameRef.update({
+                    players: currentGame.players,
+                    deck: currentGame.deck,
+                    communityCards: currentGame.communityCards,
+                    pot: currentGame.pot,
+                    currentBet: currentGame.currentBet,
+                    currentPlayer: currentGame.currentPlayer,
+                    stage: currentGame.stage,
+                    playersActed: currentGame.playersActed,
+                    handCount: currentGame.handCount,
+                    smallBlind: currentGame.smallBlind,
+                    bigBlind: currentGame.bigBlind,
+                    lastWinner: currentGame.lastWinner
+                });
             }
         }
         
