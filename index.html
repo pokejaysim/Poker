@@ -1505,7 +1505,7 @@
     <div class="container">
         <div class="login-container" id="loginScreen">
             <h1>Texas Hold'em Poker</h1>
-            <p id="loadingMessage">Loading game...</p>
+            <p id="loadingMessage">Loading game...<br><small style="color: rgba(255,255,255,0.5);">Connecting to Firebase...</small></p>
             <div id="authButtons" style="display: none;">
                 <p>Sign in to start playing</p>
                 <button class="google-signin-btn" onclick="signInWithGoogle()">
@@ -1638,11 +1638,26 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-app-compat.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-firestore-compat.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-auth-compat.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     
     <script>
+        console.log('Script started loading...');
+        
+        // Test if scripts can load
+        window.addEventListener('load', () => {
+            console.log('Window loaded');
+            console.log('Firebase object exists?', typeof firebase !== 'undefined');
+            if (typeof firebase === 'undefined') {
+                console.error('Firebase scripts failed to load. Possible causes:');
+                console.error('1. Internet connection issues');
+                console.error('2. Ad blocker or script blocker');
+                console.error('3. Content Security Policy blocking external scripts');
+                console.error('4. Firebase CDN is blocked in your region');
+            }
+        });
+        
         // Define auth functions early to ensure they're available
         function signInWithGoogle() {
             if (!auth) {
@@ -1726,44 +1741,81 @@
 
         // Initialize Firebase when scripts are loaded
         function initializeFirebase() {
+            console.log('Attempting to initialize Firebase...');
+            console.log('Firebase available?', typeof firebase !== 'undefined');
+            
             if (typeof firebase !== 'undefined' && !firebaseInitialized) {
                 firebaseInitialized = true;
-                firebase.initializeApp(firebaseConfig);
-                db = firebase.firestore();
-                auth = firebase.auth();
+                console.log('Initializing Firebase with config:', firebaseConfig);
                 
-                // Set persistence to LOCAL (default) to maintain sessions
-                auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
-                    .catch((error) => {
-                        console.error('Error setting persistence:', error);
-                    });
-                
-                // Setup auth state observer
-                setupAuthObserver();
-                
-                // Show auth buttons
-                document.getElementById('loadingMessage').style.display = 'none';
-                document.getElementById('authButtons').style.display = 'block';
-                
-                console.log('Firebase initialized successfully');
+                try {
+                    firebase.initializeApp(firebaseConfig);
+                    db = firebase.firestore();
+                    auth = firebase.auth();
+                    
+                    console.log('Firebase initialized successfully');
+                    console.log('Firestore available?', !!db);
+                    console.log('Auth available?', !!auth);
+                    
+                    // Set persistence to LOCAL (default) to maintain sessions
+                    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+                        .then(() => {
+                            console.log('Auth persistence set successfully');
+                        })
+                        .catch((error) => {
+                            console.error('Error setting persistence:', error);
+                        });
+                    
+                    // Setup auth state observer
+                    setupAuthObserver();
+                    
+                    // Show auth buttons
+                    document.getElementById('loadingMessage').style.display = 'none';
+                    document.getElementById('authButtons').style.display = 'block';
+                    
+                } catch (error) {
+                    console.error('Error initializing Firebase:', error);
+                    document.getElementById('loadingMessage').textContent = 'Error initializing game. Please refresh.';
+                    document.getElementById('loadingMessage').style.color = '#e74c3c';
+                }
             }
         }
         
         // Check if Firebase is loaded
+        console.log('Checking for Firebase...');
         if (typeof firebase !== 'undefined') {
+            console.log('Firebase found immediately, initializing...');
             initializeFirebase();
         } else {
+            console.log('Firebase not found, waiting...');
             // Wait for Firebase to load
             let attempts = 0;
             const checkFirebase = setInterval(() => {
                 attempts++;
+                console.log(`Attempt ${attempts}: Checking for Firebase...`);
+                
                 if (typeof firebase !== 'undefined') {
+                    console.log('Firebase found after waiting, initializing...');
                     clearInterval(checkFirebase);
                     initializeFirebase();
                 } else if (attempts > 20) {
                     // After 10 seconds, show error
                     clearInterval(checkFirebase);
-                    document.getElementById('loadingMessage').textContent = 'Error: Failed to load game. Please refresh the page.';
+                    console.error('Firebase failed to load after 20 attempts');
+                    document.getElementById('loadingMessage').innerHTML = `
+                        <div style="text-align: left; max-width: 500px; margin: 0 auto;">
+                            <h3 style="color: #e74c3c;">Error: Failed to load game</h3>
+                            <p>Possible solutions:</p>
+                            <ul style="text-align: left;">
+                                <li>Check your internet connection</li>
+                                <li>Disable ad blockers or script blockers</li>
+                                <li>Try a different browser</li>
+                                <li>Clear your browser cache</li>
+                                <li>Check the console (F12) for specific errors</li>
+                            </ul>
+                            <button class="btn btn-primary" onclick="location.reload()">Retry</button>
+                        </div>
+                    `;
                     document.getElementById('loadingMessage').style.color = '#e74c3c';
                 }
             }, 500);
