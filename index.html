@@ -1643,241 +1643,571 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
     
-    <!-- Fallback check -->
     <script>
-        // Check if Firebase loaded
-        setTimeout(() => {
-            if (typeof firebase === 'undefined') {
-                document.getElementById('loadingMessage').innerHTML = `
-                    <div style="text-align: center; max-width: 600px; margin: 0 auto;">
-                        <h3 style="color: #e74c3c;">⚠️ Firebase Failed to Load</h3>
-                        <p style="color: rgba(255,255,255,0.8); margin: 20px 0;">This usually happens due to:</p>
-                        <ul style="text-align: left; color: rgba(255,255,255,0.7);">
-                            <li>Ad blockers or privacy extensions blocking scripts</li>
-                            <li>Network/firewall blocking Google services</li>
-                            <li>Browser security settings</li>
-                        </ul>
-                        <p style="margin-top: 20px;">
-                            <button class="btn btn-primary" onclick="location.reload()">Try Again</button>
-                        </p>
-                        <p style="margin-top: 20px; font-size: 0.9rem; color: rgba(255,255,255,0.5);">
-                            Or try: Disable ad blockers, use a different browser, or check console (F12) for errors
-                        </p>
-                    </div>
-                `;
+        // Wait for DOM to be ready
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, initializing game...');
+            
+            // Global variables
+            let db, auth;
+            let currentGame = null;
+            let playerId = null;
+            let playerName = null;
+            let playerPhotoURL = null;
+            let gameListener = null;
+            let chatListener = null;
+            let unreadMessages = 0;
+            let isMobile = false;
+            
+            // Firebase configuration
+            const firebaseConfig = {
+                apiKey: "AIzaSyDNnyiWr2HIHsvL69LboLoUCIzVmvfanW8",
+                authDomain: "poker-7eeef.firebaseapp.com",
+                projectId: "poker-7eeef",
+                storageBucket: "poker-7eeef.firebasestorage.app",
+                messagingSenderId: "203143203913",
+                appId: "1:203143203913:web:ea195b6158c16c61280398"
+            };
+            
+            // Initialize Firebase
+            try {
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+                auth = firebase.auth();
+                console.log('Firebase initialized successfully');
+                
+                // Set persistence
+                auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+                
+                // Setup auth observer
+                setupAuthObserver();
+                
+                // Initialize all functions
+                initializeFunctions();
+                
+                // Show auth buttons
+                document.getElementById('loadingMessage').style.display = 'none';
+                document.getElementById('authButtons').style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error initializing Firebase:', error);
+                document.getElementById('loadingMessage').innerHTML = 'Error loading game. Please refresh.';
+                document.getElementById('loadingMessage').style.color = '#e74c3c';
             }
-        }, 3000);
-    </script>
-    
-    <script>
-        console.log('Script started loading...');
-        
-        // Test if scripts can load
-        window.addEventListener('load', () => {
-            console.log('Window loaded');
-            console.log('Firebase object exists?', typeof firebase !== 'undefined');
-            if (typeof firebase === 'undefined') {
-                console.error('Firebase scripts failed to load. Possible causes:');
-                console.error('1. Internet connection issues');
-                console.error('2. Ad blocker or script blocker');
-                console.error('3. Content Security Policy blocking external scripts');
-                console.error('4. Firebase CDN is blocked in your region');
+            
+            // Detect mobile device
+            function isMobileDevice() {
+                return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                       window.innerWidth <= 768 ||
+                       ('ontouchstart' in window) ||
+                       (navigator.maxTouchPoints > 0);
             }
-        });
-        
-        // Define auth functions early to ensure they're available
-        function signInWithGoogle() {
-            if (!auth) {
-                alert('Firebase is still loading. Please try again in a moment.');
-                return;
-            }
-            const provider = new firebase.auth.GoogleAuthProvider();
-            auth.signInWithPopup(provider).catch((error) => {
-                console.error('Error signing in with Google:', error);
-                if (error.code === 'auth/popup-blocked') {
-                    alert('Popup was blocked. Please allow popups for this site.');
-                } else if (error.code === 'auth/unauthorized-domain') {
-                    alert('This domain is not authorized. Please add it to Firebase authorized domains.');
-                } else if (error.code === 'auth/operation-not-allowed') {
-                    alert('Google sign-in is not enabled. Please enable it in Firebase Console.');
-                } else {
-                    alert(`Error signing in: ${error.message}`);
-                }
+            
+            isMobile = isMobileDevice();
+            
+            // Update mobile detection on resize
+            window.addEventListener('resize', () => {
+                isMobile = isMobileDevice();
             });
-        }
-
-        function signInAnonymously() {
-            if (!auth) {
-                alert('Firebase is still loading. Please try again in a moment.');
-                return;
-            }
-            auth.signInAnonymously().catch((error) => {
-                console.error('Error signing in anonymously:', error);
-                if (error.code === 'auth/operation-not-allowed') {
-                    alert('Anonymous sign-in is not enabled. Please enable it in Firebase Console.');
-                } else {
-                    alert(`Error signing in as guest: ${error.message}`);
-                }
-            });
-        }
-        
-        function signOut() {
-            if (typeof firebase !== 'undefined' && firebase.auth && auth) {
-                auth.signOut().catch((error) => {
-                    console.error('Error signing out:', error);
+            
+            // Setup auth state observer
+            function setupAuthObserver() {
+                auth.onAuthStateChanged((user) => {
+                    if (user) {
+                        // User is signed in
+                        playerId = user.uid;
+                        
+                        // Handle anonymous users
+                        if (user.isAnonymous) {
+                            const guestNames = ['Ace', 'King', 'Queen', 'Jack', 'Royal', 'Flush', 'Bluff', 'Shark', 'Pro'];
+                            const randomName = guestNames[Math.floor(Math.random() * guestNames.length)];
+                            playerName = randomName + '_' + user.uid.substring(0, 4).toUpperCase();
+                            playerPhotoURL = 'https://www.gravatar.com/avatar/?d=identicon&s=200';
+                        } else {
+                            playerName = user.displayName;
+                            playerPhotoURL = user.photoURL;
+                        }
+                        
+                        document.getElementById('loginScreen').style.display = 'none';
+                        document.getElementById('lobby').style.display = 'flex';
+                        document.getElementById('userName').textContent = playerName;
+                        document.getElementById('userName').className = 'user-name' + (user.isAnonymous ? ' guest' : '');
+                        document.getElementById('userAvatar').src = playerPhotoURL;
+                    } else {
+                        // User is signed out
+                        document.getElementById('loginScreen').style.display = 'flex';
+                        document.getElementById('lobby').style.display = 'none';
+                        document.getElementById('gameContainer').style.display = 'none';
+                        
+                        // Clean up any active game listeners
+                        if (gameListener) {
+                            gameListener();
+                            gameListener = null;
+                        }
+                        if (chatListener) {
+                            chatListener();
+                            chatListener = null;
+                        }
+                        
+                        // Reset variables
+                        currentGame = null;
+                        playerId = null;
+                        playerName = null;
+                        playerPhotoURL = null;
+                    }
                 });
             }
-        }
-        
-        // Detect mobile device
-        function isMobileDevice() {
-            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-                   window.innerWidth <= 768 ||
-                   ('ontouchstart' in window) ||
-                   (navigator.maxTouchPoints > 0);
-        }
-        
-        let isMobile = isMobileDevice();
-        
-        // Update mobile detection on resize
-        window.addEventListener('resize', () => {
-            isMobile = isMobileDevice();
-        });
-        
-        // Global variables
-        let db, auth;
-        let currentGame = null;
-        let playerId = null;
-        let playerName = null;
-        let playerPhotoURL = null;
-        let gameListener = null;
-        let chatListener = null;
-        let unreadMessages = 0;
-        
-        // Firebase configuration
-        let firebaseInitialized = false;
-        
-        const firebaseConfig = {
-            apiKey: "AIzaSyDNnyiWr2HIHsvL69LboLoUCIzVmvfanW8",
-            authDomain: "poker-7eeef.firebaseapp.com",
-            projectId: "poker-7eeef",
-            storageBucket: "poker-7eeef.firebasestorage.app",
-            messagingSenderId: "203143203913",
-            appId: "1:203143203913:web:ea195b6158c16c61280398"
-        };
-
-        // Initialize Firebase when scripts are loaded
-        function initializeFirebase() {
-            console.log('Attempting to initialize Firebase...');
-            console.log('Firebase available?', typeof firebase !== 'undefined');
             
-            if (typeof firebase !== 'undefined' && !firebaseInitialized) {
-                firebaseInitialized = true;
-                console.log('Initializing Firebase with config:', firebaseConfig);
+            // Initialize all game functions
+            function initializeFunctions() {
+                // Card deck constants
+                const suits = ['♠', '♥', '♦', '♣'];
+                const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+                const suitColors = { '♠': 'black', '♣': 'black', '♥': 'red', '♦': 'red' };
                 
-                try {
-                    firebase.initializeApp(firebaseConfig);
-                    db = firebase.firestore();
-                    auth = firebase.auth();
-                    
-                    console.log('Firebase initialized successfully');
-                    console.log('Firestore available?', !!db);
-                    console.log('Auth available?', !!auth);
-                    
-                    // Set persistence to LOCAL (default) to maintain sessions
-                    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
-                        .then(() => {
-                            console.log('Auth persistence set successfully');
-                        })
-                        .catch((error) => {
-                            console.error('Error setting persistence:', error);
-                        });
-                    
-                    // Setup auth state observer
-                    setupAuthObserver();
-                    
-                    // Show auth buttons
-                    document.getElementById('loadingMessage').style.display = 'none';
-                    document.getElementById('authButtons').style.display = 'block';
-                    
-                } catch (error) {
-                    console.error('Error initializing Firebase:', error);
-                    document.getElementById('loadingMessage').textContent = 'Error initializing game. Please refresh.';
-                    document.getElementById('loadingMessage').style.color = '#e74c3c';
+                // Make functions global
+                window.signInWithGoogle = function() {
+                    const provider = new firebase.auth.GoogleAuthProvider();
+                    // Use redirect for GitHub Pages
+                    auth.signInWithRedirect(provider).catch((error) => {
+                        console.error('Error signing in with Google:', error);
+                        alert('Error signing in: ' + error.message);
+                    });
                 }
-            }
-        }
-        
-        // Check if Firebase is loaded
-        console.log('Checking for Firebase...');
-        if (typeof firebase !== 'undefined') {
-            console.log('Firebase found immediately, initializing...');
-            initializeFirebase();
-        } else {
-            console.log('Firebase not found, waiting...');
-            // Wait for Firebase to load
-            let attempts = 0;
-            const checkFirebase = setInterval(() => {
-                attempts++;
-                console.log(`Attempt ${attempts}: Checking for Firebase...`);
                 
-                if (typeof firebase !== 'undefined') {
-                    console.log('Firebase found after waiting, initializing...');
-                    clearInterval(checkFirebase);
-                    initializeFirebase();
-                } else if (attempts > 20) {
-                    // After 10 seconds, show error
-                    clearInterval(checkFirebase);
-                    console.error('Firebase failed to load after 20 attempts');
-                    document.getElementById('loadingMessage').innerHTML = `
-                        <div style="text-align: left; max-width: 500px; margin: 0 auto;">
-                            <h3 style="color: #e74c3c;">Error: Failed to load game</h3>
-                            <p>Possible solutions:</p>
-                            <ul style="text-align: left;">
-                                <li>Check your internet connection</li>
-                                <li>Disable ad blockers or script blockers</li>
-                                <li>Try a different browser</li>
-                                <li>Clear your browser cache</li>
-                                <li>Check the console (F12) for specific errors</li>
-                            </ul>
-                            <button class="btn btn-primary" onclick="location.reload()">Retry</button>
-                        </div>
-                    `;
-                    document.getElementById('loadingMessage').style.color = '#e74c3c';
+                window.signInAnonymously = function() {
+                    auth.signInAnonymously().catch((error) => {
+                        console.error('Error signing in anonymously:', error);
+                        alert('Error signing in as guest: ' + error.message);
+                    });
                 }
-            }, 500);
-        }
-
-        // Setup auth state observer
-        function setupAuthObserver() {
-            auth.onAuthStateChanged((user) => {
-                if (user) {
-                    // User is signed in
-                    playerId = user.uid;
-                    
-                    // Handle anonymous users
-                    if (user.isAnonymous) {
-                        const guestNames = ['Ace', 'King', 'Queen', 'Jack', 'Royal', 'Flush', 'Bluff', 'Shark', 'Pro'];
-                        const randomName = guestNames[Math.floor(Math.random() * guestNames.length)];
-                        playerName = randomName + '_' + user.uid.substring(0, 4).toUpperCase();
-                        playerPhotoURL = 'https://www.gravatar.com/avatar/?d=identicon&s=200';
-                    } else {
-                        playerName = user.displayName;
-                        playerPhotoURL = user.photoURL;
+                
+                window.signOut = function() {
+                    auth.signOut().catch((error) => {
+                        console.error('Error signing out:', error);
+                    });
+                }
+                
+                function generateRoomCode() {
+                    return Math.random().toString(36).substring(2, 8).toUpperCase();
+                }
+                
+                function createDeck() {
+                    const deck = [];
+                    for (const suit of suits) {
+                        for (const rank of ranks) {
+                            deck.push({ suit, rank });
+                        }
+                    }
+                    return shuffleDeck(deck);
+                }
+                
+                function shuffleDeck(deck) {
+                    const newDeck = [...deck];
+                    for (let i = newDeck.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [newDeck[i], newDeck[j]] = [newDeck[j], newDeck[i]];
+                    }
+                    return newDeck;
+                }
+                
+                window.createGame = async function() {
+                    if (!auth.currentUser) {
+                        alert('Please sign in first');
+                        return;
                     }
                     
-                    document.getElementById('loginScreen').style.display = 'none';
-                    document.getElementById('lobby').style.display = 'flex';
-                    document.getElementById('userName').textContent = playerName;
-                    document.getElementById('userName').className = 'user-name' + (user.isAnonymous ? ' guest' : '');
-                    document.getElementById('userAvatar').src = playerPhotoURL;
-                } else {
-                    // User is signed out
-                    document.getElementById('loginScreen').style.display = 'flex';
-                    document.getElementById('lobby').style.display = 'none';
-                    document.getElementById('gameContainer').style.display = 'none';
+                    const roomCode = generateRoomCode();
                     
-                    // Clean up any active game listeners
+                    const gameData = {
+                        roomCode,
+                        players: [{
+                            id: playerId,
+                            name: playerName,
+                            chips: 5000,
+                            cards: [],
+                            bet: 0,
+                            folded: false
+                        }],
+                        deck: createDeck(),
+                        communityCards: [],
+                        pot: 0,
+                        currentPlayer: 0,
+                        dealerPosition: 0,
+                        stage: 'waiting',
+                        currentBet: 0,
+                        playersActed: [],
+                        lastWinner: null,
+                        handCount: 0,
+                        smallBlind: 25,
+                        bigBlind: 50,
+                        created: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+                    
+                    try {
+                        await db.collection('games').doc(roomCode).set(gameData);
+                        console.log('New hand dealt manually');
+                    } catch (error) {
+                        console.error('Error dealing new hand:', error);
+                        alert('Error dealing new hand. Please try again.');
+                    }
+                }
+                
+                // Chat functionality
+                function startChatListener(roomCode) {
+                    if (chatListener) {
+                        chatListener();
+                    }
+                    
+                    console.log('Starting chat listener for room:', roomCode);
+                    
+                    chatListener = db.collection('games').doc(roomCode).collection('messages')
+                        .orderBy('timestamp', 'asc')
+                        .onSnapshot((snapshot) => {
+                            snapshot.docChanges().forEach((change) => {
+                                if (change.type === 'added') {
+                                    const message = change.doc.data();
+                                    displayMessage(message);
+                                    
+                                    // Update unread count if chat is hidden and message is not from current user
+                                    if (isMobile && !document.getElementById('chatContainer').classList.contains('mobile-visible') && 
+                                        message.userId !== playerId) {
+                                        unreadMessages++;
+                                        updateChatBadge();
+                                    }
+                                }
+                            });
+                        }, (error) => {
+                            console.error('Error listening to chat updates:', error);
+                        });
+                }
+                
+                function displayMessage(message) {
+                    const messagesContainer = document.getElementById('chatMessages');
+                    const messageEl = document.createElement('div');
+                    
+                    const isOwn = message.userId === playerId;
+                    const isSystem = message.type === 'system';
+                    
+                    messageEl.className = `chat-message ${isOwn ? 'own' : ''} ${isSystem ? 'system' : ''}`;
+                    
+                    if (isSystem) {
+                        messageEl.innerHTML = `
+                            <div class="message-content">
+                                <div class="message-text">${message.text}</div>
+                                <div class="message-time">${formatTime(message.timestamp)}</div>
+                            </div>
+                        `;
+                    } else {
+                        messageEl.innerHTML = `
+                            ${!isOwn ? `<img class="message-avatar" src="${message.userAvatar}" onerror="this.src='https://www.gravatar.com/avatar/?d=mp&s=200'">` : ''}
+                            <div class="message-content">
+                                <div class="message-author">${message.userName}</div>
+                                <div class="message-text">${message.text}</div>
+                                <div class="message-time">${formatTime(message.timestamp)}</div>
+                            </div>
+                            ${isOwn ? `<img class="message-avatar" src="${message.userAvatar}" onerror="this.src='https://www.gravatar.com/avatar/?d=mp&s=200'">` : ''}
+                        `;
+                    }
+                    
+                    messagesContainer.appendChild(messageEl);
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
+                
+                function formatTime(timestamp) {
+                    if (!timestamp) return '';
+                    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+                    const hours = date.getHours().toString().padStart(2, '0');
+                    const minutes = date.getMinutes().toString().padStart(2, '0');
+                    return `${hours}:${minutes}`;
+                }
+                
+                window.sendMessage = async function() {
+                    const input = document.getElementById('chatInput');
+                    const text = input.value.trim();
+                    
+                    if (!text || !currentGame || !currentGame.id) return;
+                    
+                    try {
+                        await db.collection('games').doc(currentGame.id).collection('messages').add({
+                            text: text,
+                            userId: playerId,
+                            userName: playerName,
+                            userAvatar: playerPhotoURL,
+                            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                            type: 'user'
+                        });
+                        
+                        input.value = '';
+                    } catch (error) {
+                        console.error('Error sending message:', error);
+                    }
+                }
+                
+                async function sendSystemMessage(roomCode, text) {
+                    if (!roomCode) return;
+                    
+                    try {
+                        await db.collection('games').doc(roomCode).collection('messages').add({
+                            text: text,
+                            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                            type: 'system'
+                        });
+                    } catch (error) {
+                        console.error('Error sending system message:', error);
+                    }
+                }
+                
+                window.toggleMobileChat = function() {
+                    const chatContainer = document.getElementById('chatContainer');
+                    const isVisible = chatContainer.classList.contains('mobile-visible');
+                    
+                    if (isVisible) {
+                        chatContainer.classList.remove('mobile-visible');
+                    } else {
+                        chatContainer.classList.add('mobile-visible');
+                        // Reset unread count
+                        unreadMessages = 0;
+                        updateChatBadge();
+                        // Focus input
+                        setTimeout(() => {
+                            document.getElementById('chatInput').focus();
+                        }, 100);
+                    }
+                }
+                
+                function updateChatBadge() {
+                    const badge = document.getElementById('chatBadge');
+                    if (unreadMessages > 0) {
+                        badge.textContent = unreadMessages > 9 ? '9+' : unreadMessages;
+                        badge.style.display = 'flex';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+                
+                // Chat input handling
+                const chatInput = document.getElementById('chatInput');
+                const chatSendBtn = document.getElementById('chatSendBtn');
+                
+                // Send message on Enter
+                chatInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage();
+                    }
+                });
+                
+                // Update send button state
+                chatInput.addEventListener('input', () => {
+                    chatSendBtn.disabled = !chatInput.value.trim();
+                });
+            }
+            
+            // Initialize everything
+            console.log('Game initialization complete');
+        });
+    </script>
+</body>
+</html>Created new game:', roomCode);
+                        
+                        // Send system message
+                        await sendSystemMessage(roomCode, `${playerName} created the game`);
+                        
+                        startGameListener(roomCode);
+                        startChatListener(roomCode);
+                        showGame(roomCode);
+                    } catch (error) {
+                        console.error('Error creating game:', error);
+                        alert('Error creating game. Please try again.');
+                    }
+                }
+                
+                window.showJoinGame = function() {
+                    document.getElementById('joinGameSection').style.display = 'block';
+                }
+                
+                window.joinGame = async function() {
+                    if (!auth.currentUser) {
+                        alert('Please sign in first');
+                        return;
+                    }
+                    
+                    const roomCode = document.getElementById('roomCode').value.trim().toUpperCase();
+                    
+                    if (!roomCode) {
+                        alert('Please enter a room code');
+                        return;
+                    }
+                    
+                    try {
+                        const gameRef = db.collection('games').doc(roomCode);
+                        const gameDoc = await gameRef.get();
+                        
+                        if (!gameDoc.exists) {
+                            alert('Game not found');
+                            return;
+                        }
+                        
+                        const gameData = gameDoc.data();
+                        
+                        if (gameData.players.length >= 2) {
+                            alert('Game is full');
+                            return;
+                        }
+                        
+                        gameData.players.push({
+                            id: playerId,
+                            name: playerName,
+                            chips: 5000,
+                            cards: [],
+                            bet: 0,
+                            folded: false
+                        });
+                        
+                        // Send system message
+                        await sendSystemMessage(roomCode, `${playerName} joined the game`);
+                        
+                        // If game state is incomplete, initialize missing fields
+                        if (!gameData.hasOwnProperty('smallBlind')) {
+                            gameData.smallBlind = 25;
+                            gameData.bigBlind = 50;
+                            gameData.handCount = 0;
+                        }
+                        
+                        if (gameData.players.length === 2) {
+                            gameData.stage = 'preflop';
+                            gameData.currentPlayer = 0;
+                            gameData.playersActed = [];
+                            gameData.currentBet = 0;
+                            gameData.pot = 0;
+                            gameData.handCount = gameData.handCount || 0;
+                            gameData.smallBlind = gameData.smallBlind || 25;
+                            gameData.bigBlind = gameData.bigBlind || 50;
+                            
+                            // Deal cards and post blinds
+                            dealCards(gameData);
+                            
+                            // Send system message
+                            await sendSystemMessage(roomCode, 'Game started! Dealing cards...');
+                            
+                            // Update the game with all changes including blinds
+                            await gameRef.update({
+                                players: gameData.players,
+                                stage: gameData.stage,
+                                pot: gameData.pot,
+                                currentBet: gameData.currentBet,
+                                deck: gameData.deck,
+                                handCount: gameData.handCount,
+                                playersActed: gameData.playersActed,
+                                smallBlind: gameData.smallBlind,
+                                bigBlind: gameData.bigBlind
+                            });
+                            
+                            startGameListener(roomCode);
+                            startChatListener(roomCode);
+                            showGame(roomCode);
+                            return;
+                        }
+                        
+                        await gameRef.update(gameData);
+                        startGameListener(roomCode);
+                        startChatListener(roomCode);
+                        showGame(roomCode);
+                    } catch (error) {
+                        console.error('Error joining game:', error);
+                        alert('Error joining game. Please try again.');
+                    }
+                }
+                
+                function dealCards(gameData) {
+                    // Increment hand count
+                    gameData.handCount = (gameData.handCount || 0) + 1;
+                    
+                    // Check if we need to increase blinds (every 5 hands)
+                    if (gameData.handCount > 1 && (gameData.handCount - 1) % 5 === 0) {
+                        gameData.smallBlind *= 2;
+                        gameData.bigBlind *= 2;
+                    }
+                    
+                    // Deal 2 cards to each player
+                    for (let i = 0; i < gameData.players.length; i++) {
+                        gameData.players[i].cards = [
+                            gameData.deck.pop(),
+                            gameData.deck.pop()
+                        ];
+                        gameData.players[i].bet = 0;
+                        gameData.players[i].folded = false;
+                    }
+                    
+                    // Reset pot before posting blinds
+                    gameData.pot = 0;
+                    
+                    // Post blinds (for 2 players: player 0 is small blind/dealer, player 1 is big blind)
+                    const smallBlindPlayer = gameData.players[0];
+                    const bigBlindPlayer = gameData.players[1];
+                    
+                    // Post small blind (all-in if necessary)
+                    const smallBlindAmount = Math.min(gameData.smallBlind, smallBlindPlayer.chips);
+                    smallBlindPlayer.chips -= smallBlindAmount;
+                    smallBlindPlayer.bet = smallBlindAmount;
+                    gameData.pot += smallBlindAmount;
+                    
+                    // Post big blind (all-in if necessary)
+                    const bigBlindAmount = Math.min(gameData.bigBlind, bigBlindPlayer.chips);
+                    bigBlindPlayer.chips -= bigBlindAmount;
+                    bigBlindPlayer.bet = bigBlindAmount;
+                    gameData.pot += bigBlindAmount;
+                    
+                    // Set current bet to the highest bet (in case someone went all-in)
+                    gameData.currentBet = Math.max(smallBlindAmount, bigBlindAmount);
+                    
+                    // In heads-up (2 players), small blind acts first pre-flop
+                    gameData.currentPlayer = 0;
+                    gameData.playersActed = [];
+                    
+                    // If big blind is all-in with less than the full blind, small blind only needs to match
+                    if (bigBlindAmount < gameData.bigBlind && smallBlindAmount < bigBlindAmount) {
+                        gameData.currentBet = bigBlindAmount;
+                    }
+                }
+                
+                function startGameListener(roomCode) {
+                    if (gameListener) {
+                        gameListener();
+                    }
+                    
+                    console.log('Starting game listener for room:', roomCode);
+                    
+                    gameListener = db.collection('games').doc(roomCode)
+                        .onSnapshot((doc) => {
+                            if (doc.exists) {
+                                const newGameData = doc.data();
+                                const previousStage = currentGame ? currentGame.stage : null;
+                                const previousHandCount = currentGame ? currentGame.handCount : 0;
+                                
+                                currentGame = newGameData;
+                                currentGame.id = roomCode;
+                                
+                                updateGameUI();
+                            } else {
+                                console.log('Game document does not exist');
+                            }
+                        }, (error) => {
+                            console.error('Error listening to game updates:', error);
+                        });
+                }
+                
+                function showGame(roomCode) {
+                    document.getElementById('lobby').style.display = 'none';
+                    document.getElementById('gameContainer').style.display = 'block';
+                    document.getElementById('roomCodeDisplay').textContent = `Room: ${roomCode}`;
+                    document.getElementById('gameUserName').textContent = playerName;
+                    document.getElementById('gameUserName').className = 'user-name' + (auth.currentUser && auth.currentUser.isAnonymous ? ' guest' : '');
+                    document.getElementById('gameUserAvatar').src = playerPhotoURL;
+                }
+                
+                window.leaveGame = async function() {
                     if (gameListener) {
                         gameListener();
                         gameListener = null;
@@ -1887,1530 +2217,1051 @@
                         chatListener = null;
                     }
                     
-                    // Reset variables
+                    // Send leave message
+                    if (currentGame && currentGame.id) {
+                        await sendSystemMessage(currentGame.id, `${playerName} left the game`);
+                    }
+                    
+                    // Clean up any winner announcements
+                    const announcement = document.querySelector('.winner-announcement');
+                    if (announcement) {
+                        announcement.remove();
+                    }
+                    
+                    // Reset chat
+                    document.getElementById('chatMessages').innerHTML = '';
+                    unreadMessages = 0;
+                    updateChatBadge();
+                    
                     currentGame = null;
-                    playerId = null;
-                    playerName = null;
-                    playerPhotoURL = null;
-                }
-            });
-        }
-
-        // Card deck
-        const suits = ['♠', '♥', '♦', '♣'];
-        const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-        const suitColors = { '♠': 'black', '♣': 'black', '♥': 'red', '♦': 'red' };
-
-        function generateRoomCode() {
-            return Math.random().toString(36).substring(2, 8).toUpperCase();
-        }
-
-        function createDeck() {
-            const deck = [];
-            for (const suit of suits) {
-                for (const rank of ranks) {
-                    deck.push({ suit, rank });
-                }
-            }
-            return shuffleDeck(deck);
-        }
-
-        function shuffleDeck(deck) {
-            const newDeck = [...deck];
-            for (let i = newDeck.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [newDeck[i], newDeck[j]] = [newDeck[j], newDeck[i]];
-            }
-            return newDeck;
-        }
-
-        window.createGame = async function() {
-            if (!auth || !auth.currentUser) {
-                alert('Please sign in first');
-                return;
-            }
-
-            const roomCode = generateRoomCode();
-            
-            const gameData = {
-                roomCode,
-                players: [{
-                    id: playerId,
-                    name: playerName,
-                    chips: 5000,
-                    cards: [],
-                    bet: 0,
-                    folded: false
-                }],
-                deck: createDeck(),
-                communityCards: [],
-                pot: 0,
-                currentPlayer: 0,
-                dealerPosition: 0,
-                stage: 'waiting', // waiting, preflop, flop, turn, river, showdown
-                currentBet: 0,
-                playersActed: [],
-                lastWinner: null,
-                handCount: 0,
-                smallBlind: 25,
-                bigBlind: 50,
-                created: firebase.firestore.FieldValue.serverTimestamp()
-            };
-
-            try {
-                await db.collection('games').doc(roomCode).set(gameData);
-                console.log('Created new game:', roomCode);
-                
-                // Send system message
-                await sendSystemMessage(roomCode, `${playerName} created the game`);
-                
-                startGameListener(roomCode);
-                startChatListener(roomCode);
-                showGame(roomCode);
-            } catch (error) {
-                console.error('Error creating game:', error);
-                alert('Error creating game. Please try again.');
-            }
-        }
-
-        window.showJoinGame = function() {
-            document.getElementById('joinGameSection').style.display = 'block';
-        }
-
-        window.joinGame = async function() {
-            if (!auth || !auth.currentUser) {
-                alert('Please sign in first');
-                return;
-            }
-            
-            const roomCode = document.getElementById('roomCode').value.trim().toUpperCase();
-            
-            if (!roomCode) {
-                alert('Please enter a room code');
-                return;
-            }
-
-            try {
-                const gameRef = db.collection('games').doc(roomCode);
-                const gameDoc = await gameRef.get();
-                
-                if (!gameDoc.exists) {
-                    alert('Game not found');
-                    return;
-                }
-
-                const gameData = gameDoc.data();
-                
-                if (gameData.players.length >= 2) {
-                    alert('Game is full');
-                    return;
-                }
-
-                gameData.players.push({
-                    id: playerId,
-                    name: playerName,
-                    chips: 5000,
-                    cards: [],
-                    bet: 0,
-                    folded: false
-                });
-
-                // Send system message
-                await sendSystemMessage(roomCode, `${playerName} joined the game`);
-
-                // If game state is incomplete, initialize missing fields
-                if (!gameData.hasOwnProperty('smallBlind')) {
-                    gameData.smallBlind = 25;
-                    gameData.bigBlind = 50;
-                    gameData.handCount = 0;
+                    document.getElementById('gameContainer').style.display = 'none';
+                    document.getElementById('lobby').style.display = 'flex';
+                    document.getElementById('joinGameSection').style.display = 'none';
+                    document.getElementById('roomCode').value = '';
                 }
                 
-                if (gameData.players.length === 2) {
-                    gameData.stage = 'preflop';
-                    gameData.currentPlayer = 0;
-                    gameData.playersActed = [];
-                    gameData.currentBet = 0;
-                    gameData.pot = 0;
-                    gameData.handCount = gameData.handCount || 0;
-                    gameData.smallBlind = gameData.smallBlind || 25;
-                    gameData.bigBlind = gameData.bigBlind || 50;
+                function updateGameUI() {
+                    if (!currentGame) return;
                     
-                    // Deal cards and post blinds
-                    dealCards(gameData);
-                    
-                    // Send system message
-                    await sendSystemMessage(roomCode, 'Game started! Dealing cards...');
-                    
-                    // Log the state after dealing to debug
-                    console.log('After dealing cards and posting blinds:');
-                    console.log('Player 0:', gameData.players[0].name, 'Chips:', gameData.players[0].chips, 'Bet:', gameData.players[0].bet);
-                    console.log('Player 1:', gameData.players[1].name, 'Chips:', gameData.players[1].chips, 'Bet:', gameData.players[1].bet);
-                    console.log('Pot:', gameData.pot, 'Current Bet:', gameData.currentBet);
-                    
-                    // Update the game with all changes including blinds
-                    await gameRef.update({
-                        players: gameData.players,
-                        stage: gameData.stage,
-                        pot: gameData.pot,
-                        currentBet: gameData.currentBet,
-                        deck: gameData.deck,
-                        handCount: gameData.handCount,
-                        playersActed: gameData.playersActed,
-                        smallBlind: gameData.smallBlind,
-                        bigBlind: gameData.bigBlind
-                    });
-                    
-                    startGameListener(roomCode);
-                    startChatListener(roomCode);
-                    showGame(roomCode);
-                    return;
-                }
-
-                await gameRef.update(gameData);
-                startGameListener(roomCode);
-                startChatListener(roomCode);
-                showGame(roomCode);
-            } catch (error) {
-                console.error('Error joining game:', error);
-                alert('Error joining game. Please try again.');
-            }
-        }
-
-        function dealCards(gameData) {
-            // Increment hand count
-            gameData.handCount = (gameData.handCount || 0) + 1;
-            
-            // Check if we need to increase blinds (every 5 hands)
-            if (gameData.handCount > 1 && (gameData.handCount - 1) % 5 === 0) {
-                gameData.smallBlind *= 2;
-                gameData.bigBlind *= 2;
-            }
-            
-            // Deal 2 cards to each player
-            for (let i = 0; i < gameData.players.length; i++) {
-                gameData.players[i].cards = [
-                    gameData.deck.pop(),
-                    gameData.deck.pop()
-                ];
-                gameData.players[i].bet = 0;
-                gameData.players[i].folded = false;
-            }
-            
-            // Reset pot before posting blinds
-            gameData.pot = 0;
-            
-            // Post blinds (for 2 players: player 0 is small blind/dealer, player 1 is big blind)
-            const smallBlindPlayer = gameData.players[0];
-            const bigBlindPlayer = gameData.players[1];
-            
-            console.log('Before posting blinds:');
-            console.log('Small blind player chips:', smallBlindPlayer.chips);
-            console.log('Big blind player chips:', bigBlindPlayer.chips);
-            
-            // Post small blind (all-in if necessary)
-            const smallBlindAmount = Math.min(gameData.smallBlind, smallBlindPlayer.chips);
-            smallBlindPlayer.chips -= smallBlindAmount;
-            smallBlindPlayer.bet = smallBlindAmount;
-            gameData.pot += smallBlindAmount;
-            
-            console.log('Posted small blind:', smallBlindAmount);
-            console.log('Small blind player chips after:', smallBlindPlayer.chips);
-            
-            // Post big blind (all-in if necessary)
-            const bigBlindAmount = Math.min(gameData.bigBlind, bigBlindPlayer.chips);
-            bigBlindPlayer.chips -= bigBlindAmount;
-            bigBlindPlayer.bet = bigBlindAmount;
-            gameData.pot += bigBlindAmount;
-            
-            console.log('Posted big blind:', bigBlindAmount);
-            console.log('Big blind player chips after:', bigBlindPlayer.chips);
-            console.log('Total pot after blinds:', gameData.pot);
-            
-            // Set current bet to the highest bet (in case someone went all-in)
-            gameData.currentBet = Math.max(smallBlindAmount, bigBlindAmount);
-            
-            // In heads-up (2 players), small blind acts first pre-flop
-            gameData.currentPlayer = 0;
-            gameData.playersActed = [];
-            
-            // If big blind is all-in with less than the full blind, small blind only needs to match
-            if (bigBlindAmount < gameData.bigBlind && smallBlindAmount < bigBlindAmount) {
-                gameData.currentBet = bigBlindAmount;
-            }
-        }
-
-        function startGameListener(roomCode) {
-            if (gameListener) {
-                gameListener();
-            }
-
-            console.log('Starting game listener for room:', roomCode);
-            
-            gameListener = db.collection('games').doc(roomCode)
-                .onSnapshot((doc) => {
-                    if (doc.exists) {
-                        const newGameData = doc.data();
-                        const previousStage = currentGame ? currentGame.stage : null;
-                        const previousHandCount = currentGame ? currentGame.handCount : 0;
+                    // Update players
+                    currentGame.players.forEach((player, index) => {
+                        const playerSlot = document.getElementById(`player${index + 1}`);
+                        const isCurrentPlayer = index === currentGame.currentPlayer;
+                        const isMe = player.id === playerId;
                         
-                        currentGame = newGameData;
-                        currentGame.id = roomCode;
+                        playerSlot.classList.toggle('current-player', isCurrentPlayer && currentGame.stage !== 'waiting' && currentGame.stage !== 'showdown');
+                        playerSlot.classList.toggle('active', isMe);
+                        playerSlot.style.opacity = player.folded ? '0.5' : '1';
                         
-                        // Log stage transitions
-                        if (previousStage !== currentGame.stage) {
-                            console.log('Game stage changed from', previousStage, 'to', currentGame.stage);
-                        }
-                        
-                        // Check if a new hand started
-                        if (previousHandCount && currentGame.handCount > previousHandCount) {
-                            console.log('New hand started! Hand #', currentGame.handCount);
-                            const gameTable = document.getElementById('gameTable');
-                            gameTable.classList.add('new-hand');
-                            setTimeout(() => {
-                                gameTable.classList.remove('new-hand');
-                            }, 1000);
-                        }
-                        
-                        updateGameUI();
-                    } else {
-                        console.log('Game document does not exist');
-                    }
-                }, (error) => {
-                    console.error('Error listening to game updates:', error);
-                });
-        }
-
-        function showGame(roomCode) {
-            document.getElementById('lobby').style.display = 'none';
-            document.getElementById('gameContainer').style.display = 'block';
-            document.getElementById('roomCodeDisplay').textContent = `Room: ${roomCode}`;
-            document.getElementById('gameUserName').textContent = playerName;
-            document.getElementById('gameUserName').className = 'user-name' + (auth.currentUser && auth.currentUser.isAnonymous ? ' guest' : '');
-            document.getElementById('gameUserAvatar').src = playerPhotoURL;
-        }
-
-        window.leaveGame = async function() {
-            if (gameListener) {
-                gameListener();
-                gameListener = null;
-            }
-            if (chatListener) {
-                chatListener();
-                chatListener = null;
-            }
-            
-            // Send leave message
-            if (currentGame && currentGame.id) {
-                await sendSystemMessage(currentGame.id, `${playerName} left the game`);
-            }
-            
-            // Clean up any winner announcements
-            const announcement = document.querySelector('.winner-announcement');
-            if (announcement) {
-                announcement.remove();
-            }
-            
-            // Reset chat
-            document.getElementById('chatMessages').innerHTML = '';
-            unreadMessages = 0;
-            updateChatBadge();
-            
-            // TODO: Optionally remove player from game in Firestore
-            
-            currentGame = null;
-            document.getElementById('gameContainer').style.display = 'none';
-            document.getElementById('lobby').style.display = 'flex';
-            document.getElementById('joinGameSection').style.display = 'none';
-            document.getElementById('roomCode').value = '';
-        }
-
-        function updateGameUI() {
-            if (!currentGame) return;
-
-            console.log('Updating UI - Current game state:', {
-                stage: currentGame.stage,
-                pot: currentGame.pot,
-                currentPlayer: currentGame.currentPlayer,
-                player0: currentGame.players[0] ? currentGame.players[0].name : 'none',
-                player1: currentGame.players[1] ? currentGame.players[1].name : 'none'
-            });
-
-            // Update players
-            currentGame.players.forEach((player, index) => {
-                const playerSlot = document.getElementById(`player${index + 1}`);
-                const isCurrentPlayer = index === currentGame.currentPlayer;
-                const isMe = player.id === playerId;
-                
-                playerSlot.classList.toggle('current-player', isCurrentPlayer && currentGame.stage !== 'waiting' && currentGame.stage !== 'showdown');
-                playerSlot.classList.toggle('active', isMe);
-                playerSlot.style.opacity = player.folded ? '0.5' : '1';
-                
-                // Update position indicators (dealer/blinds)
-                const positionEl = playerSlot.querySelector('.position-indicator');
-                if (currentGame.stage !== 'waiting' && currentGame.players.length === 2) {
-                    // In heads-up, player 0 is dealer/small blind, player 1 is big blind
-                    if (index === 0) {
-                        positionEl.style.display = 'flex';
-                        positionEl.className = 'position-indicator dealer';
-                        positionEl.innerHTML = 'D/SB';
-                        positionEl.title = 'Dealer / Small Blind';
-                    } else if (index === 1) {
-                        positionEl.style.display = 'flex';
-                        positionEl.className = 'position-indicator big-blind';
-                        positionEl.innerHTML = 'BB';
-                        positionEl.title = 'Big Blind';
-                    }
-                } else {
-                    positionEl.style.display = 'none';
-                }
-                
-                playerSlot.querySelector('.player-name').textContent = player.name + (isMe ? ' (You)' : '') + (player.folded ? ' (Folded)' : '');
-                
-                const chipsEl = playerSlot.querySelector('.player-chips');
-                if (player.chips === 0) {
-                    chipsEl.innerHTML = `<span class="chip-icon"></span> <span style="color: #e74c3c; font-weight: bold;">BANKRUPT</span>`;
-                } else {
-                    let chipDisplay = `<span class="chip-icon"></span> ${player.chips}`;
-                    if (player.bet > 0) {
-                        chipDisplay += ` <span style="color: #f39c12;">(Bet: ${player.bet})</span>`;
-                    }
-                    chipsEl.innerHTML = chipDisplay;
-                }
-                
-                // Update hand rank display
-                const handRankEl = playerSlot.querySelector('.player-hand-rank');
-                if (player.cards && player.cards.length > 0 && !player.folded && player.chips > 0) {
-                    // Show hand rank for yourself always, and for all players during showdown
-                    if (isMe || currentGame.stage === 'showdown') {
-                        let handEval;
-                        
-                        if (!currentGame.communityCards || currentGame.communityCards.length === 0) {
-                            // Pre-flop: evaluate hole cards only
-                            handEval = evaluateHoleCards(player.cards);
+                        // Update position indicators (dealer/blinds)
+                        const positionEl = playerSlot.querySelector('.position-indicator');
+                        if (currentGame.stage !== 'waiting' && currentGame.players.length === 2) {
+                            // In heads-up, player 0 is dealer/small blind, player 1 is big blind
+                            if (index === 0) {
+                                positionEl.style.display = 'flex';
+                                positionEl.className = 'position-indicator dealer';
+                                positionEl.innerHTML = 'D/SB';
+                                positionEl.title = 'Dealer / Small Blind';
+                            } else if (index === 1) {
+                                positionEl.style.display = 'flex';
+                                positionEl.className = 'position-indicator big-blind';
+                                positionEl.innerHTML = 'BB';
+                                positionEl.title = 'Big Blind';
+                            }
                         } else {
-                            // Post-flop: evaluate best 5-card hand
-                            const allCards = [...player.cards, ...currentGame.communityCards];
-                            handEval = evaluateHand(allCards);
+                            positionEl.style.display = 'none';
                         }
                         
-                        handRankEl.textContent = handEval.name;
-                        handRankEl.style.display = 'inline-block';
+                        playerSlot.querySelector('.player-name').textContent = player.name + (isMe ? ' (You)' : '') + (player.folded ? ' (Folded)' : '');
                         
-                        // Add styling based on hand strength
-                        handRankEl.className = 'player-hand-rank';
-                        if (handEval.rank >= 6) {
-                            handRankEl.classList.add('very-strong');
-                        } else if (handEval.rank >= 3) {
-                            handRankEl.classList.add('strong');
+                        const chipsEl = playerSlot.querySelector('.player-chips');
+                        if (player.chips === 0) {
+                            chipsEl.innerHTML = `<span class="chip-icon"></span> <span style="color: #e74c3c; font-weight: bold;">BANKRUPT</span>`;
+                        } else {
+                            let chipDisplay = `<span class="chip-icon"></span> ${player.chips}`;
+                            if (player.bet > 0) {
+                                chipDisplay += ` <span style="color: #f39c12;">(Bet: ${player.bet})</span>`;
+                            }
+                            chipsEl.innerHTML = chipDisplay;
                         }
-                    } else {
-                        handRankEl.style.display = 'none';
-                    }
-                } else {
-                    handRankEl.style.display = 'none';
-                }
-                
-                const cardsContainer = playerSlot.querySelector('.player-cards');
-                cardsContainer.innerHTML = '';
-                
-                if (player.cards && player.cards.length > 0) {
-                    player.cards.forEach(card => {
-                        const cardEl = document.createElement('div');
-                        cardEl.className = `card ${isMe || currentGame.stage === 'showdown' ? suitColors[card.suit] : 'back'}`;
-                        cardEl.textContent = isMe || currentGame.stage === 'showdown' ? `${card.rank}${card.suit}` : '';
-                        cardsContainer.appendChild(cardEl);
+                        
+                        // Update hand rank display
+                        const handRankEl = playerSlot.querySelector('.player-hand-rank');
+                        if (player.cards && player.cards.length > 0 && !player.folded && player.chips > 0) {
+                            // Show hand rank for yourself always, and for all players during showdown
+                            if (isMe || currentGame.stage === 'showdown') {
+                                let handEval;
+                                
+                                if (!currentGame.communityCards || currentGame.communityCards.length === 0) {
+                                    // Pre-flop: evaluate hole cards only
+                                    handEval = evaluateHoleCards(player.cards);
+                                } else {
+                                    // Post-flop: evaluate best 5-card hand
+                                    const allCards = [...player.cards, ...currentGame.communityCards];
+                                    handEval = evaluateHand(allCards);
+                                }
+                                
+                                handRankEl.textContent = handEval.name;
+                                handRankEl.style.display = 'inline-block';
+                                
+                                // Add styling based on hand strength
+                                handRankEl.className = 'player-hand-rank';
+                                if (handEval.rank >= 6) {
+                                    handRankEl.classList.add('very-strong');
+                                } else if (handEval.rank >= 3) {
+                                    handRankEl.classList.add('strong');
+                                }
+                            } else {
+                                handRankEl.style.display = 'none';
+                            }
+                        } else {
+                            handRankEl.style.display = 'none';
+                        }
+                        
+                        const cardsContainer = playerSlot.querySelector('.player-cards');
+                        cardsContainer.innerHTML = '';
+                        
+                        if (player.cards && player.cards.length > 0) {
+                            player.cards.forEach(card => {
+                                const cardEl = document.createElement('div');
+                                cardEl.className = `card ${isMe || currentGame.stage === 'showdown' ? suitColors[card.suit] : 'back'}`;
+                                cardEl.textContent = isMe || currentGame.stage === 'showdown' ? `${card.rank}${card.suit}` : '';
+                                cardsContainer.appendChild(cardEl);
+                            });
+                        }
                     });
-                }
-            });
-
-            // Update pot
-            document.getElementById('potAmount').textContent = currentGame.pot;
-            
-            // Update blinds info
-            if (currentGame.smallBlind && currentGame.bigBlind) {
-                document.getElementById('blindsInfo').textContent = `${currentGame.smallBlind}/${currentGame.bigBlind}`;
-            }
-            
-            // Update hand count
-            if (currentGame.handCount) {
-                document.getElementById('handCount').textContent = currentGame.handCount;
-            }
-
-            // Update community cards
-            const communityContainer = document.getElementById('communityCards');
-            communityContainer.innerHTML = '';
-            
-            // Clear any leftover cards during waiting or new hand
-            if (currentGame.stage === 'waiting' || 
-                (currentGame.stage === 'preflop' && (!currentGame.communityCards || currentGame.communityCards.length === 0))) {
-                communityContainer.innerHTML = '';
-            } else if (currentGame.communityCards) {
-                currentGame.communityCards.forEach(card => {
-                    const cardEl = document.createElement('div');
-                    cardEl.className = `card ${suitColors[card.suit]}`;
-                    cardEl.textContent = `${card.rank}${card.suit}`;
-                    communityContainer.appendChild(cardEl);
-                });
-            }
-
-            // Update game status
-            updateGameStatus();
-
-            // Update action buttons
-            updateActionButtons();
-        }
-
-        function updateGameStatus() {
-            const statusEl = document.getElementById('gameStatus');
-            
-            if (currentGame.stage === 'waiting') {
-                statusEl.textContent = 'Waiting for another player...';
-            } else if (currentGame.stage === 'gameover') {
-                statusEl.innerHTML = '<strong style="color: #e74c3c;">Game Over!</strong>';
-            } else if (currentGame.stage === 'showdown') {
-                // Show who won during showdown
-                if (currentGame.lastWinner) {
-                    statusEl.innerHTML = `<strong style="color: #f39c12;">${currentGame.lastWinner.name} wins ${currentGame.lastWinner.amount} chips with ${currentGame.lastWinner.hand}!</strong><br><small style="color: #ecf0f1;">Dealing new hand...</small>`;
-                } else {
-                    statusEl.textContent = 'Showdown!';
-                }
-            } else {
-                const currentPlayer = currentGame.players[currentGame.currentPlayer];
-                const isMyTurn = currentPlayer.id === playerId;
-                
-                // Vibrate on mobile when it's your turn (if supported)
-                if (isMyTurn && isMobile && 'vibrate' in navigator && !statusEl.dataset.vibrated) {
-                    navigator.vibrate(200);
-                    statusEl.dataset.vibrated = 'true';
-                } else if (!isMyTurn) {
-                    delete statusEl.dataset.vibrated;
-                }
-                
-                // Show current stage
-                const stageNames = {
-                    'preflop': 'Pre-Flop',
-                    'flop': 'Flop',
-                    'turn': 'Turn',
-                    'river': 'River'
-                };
-                
-                const stageName = stageNames[currentGame.stage] || currentGame.stage;
-                
-                // Check if blinds were just posted (pre-flop with pot > 0 and no community cards and no players have acted beyond blinds)
-                if (currentGame.stage === 'preflop' && currentGame.pot > 0 && 
-                    (!currentGame.communityCards || currentGame.communityCards.length === 0) &&
-                    (!currentGame.playersActed || currentGame.playersActed.length === 0)) {
-                    const blindsPosted = `<small style="color: #f39c12;">💰 Blinds posted: ${currentGame.smallBlind}/${currentGame.bigBlind}</small><br>`;
-                    if (isMyTurn) {
-                        statusEl.innerHTML = blindsPosted + `<strong>${stageName}</strong> - ${isMobile ? '👆 ' : ''}Your turn to act`;
-                    } else {
-                        statusEl.innerHTML = blindsPosted + `<strong>${stageName}</strong> - Waiting for ${currentPlayer.name}...`;
-                    }
-                } else {
-                    if (isMyTurn) {
-                        statusEl.innerHTML = `<strong>${stageName}</strong> - ${isMobile ? '👆 ' : ''}Your turn to act`;
-                    } else {
-                        statusEl.innerHTML = `<strong>${stageName}</strong> - Waiting for ${currentPlayer.name}...`;
-                    }
-                }
-                
-                // Show current bet if any
-                if (currentGame.currentBet > 0) {
-                    const myPlayer = currentGame.players.find(p => p.id === playerId);
-                    const callAmount = currentGame.currentBet - (myPlayer ? myPlayer.bet : 0);
-                    if (callAmount > 0) {
-                        statusEl.innerHTML += ` (To call: ${callAmount})`;
-                    }
-                }
-                
-                // Show blind increase warning
-                if (currentGame.handCount && currentGame.handCount % 5 === 4) {
-                    statusEl.innerHTML += '<br><small style="color: #e74c3c;">⚠️ Blinds will increase next hand!</small>';
-                } else if (currentGame.handCount && currentGame.handCount % 5 === 1 && currentGame.stage === 'preflop') {
-                    statusEl.innerHTML += '<br><small style="color: #f39c12;">📈 Blinds just increased!</small>';
-                }
-                
-                // Show last winner info if this is a new hand (but not during the same hand)
-                if (currentGame.lastWinner && currentGame.stage === 'preflop' && currentGame.pot > 0 && currentGame.pot <= (currentGame.smallBlind + currentGame.bigBlind)) {
-                    statusEl.innerHTML = `<small style="color: #f39c12;">Last hand: ${currentGame.lastWinner.name} won ${currentGame.lastWinner.amount} chips</small><br>` + statusEl.innerHTML;
-                }
-            }
-        }
-
-        function updateActionButtons() {
-            const actionButtons = document.getElementById('actionButtons');
-            const betInput = document.getElementById('betInput');
-            
-            if (!currentGame || !currentGame.players) return;
-            
-            const currentPlayer = currentGame.players[currentGame.currentPlayer];
-            const isMyTurn = currentPlayer && currentPlayer.id === playerId;
-            const myPlayer = currentGame.players.find(p => p.id === playerId);
-            
-            // Check if we're in showdown and need to deal a new hand
-            if (currentGame.stage === 'showdown' && currentGame.lastWinner) {
-                // Show a "Deal New Hand" button as a fallback
-                actionButtons.innerHTML = `
-                    <button class="action-btn btn-primary" onclick="manuallyDealNewHand()">Deal New Hand</button>
-                `;
-                actionButtons.style.display = 'flex';
-                betInput.style.display = 'none';
-                return;
-            }
-            
-            if (isMyTurn && currentGame.stage !== 'waiting' && currentGame.stage !== 'showdown' && currentGame.stage !== 'gameover' && !myPlayer.folded) {
-                // Reset to default action buttons
-                actionButtons.innerHTML = `
-                    <button class="action-btn btn-fold" onclick="playerAction('fold')">Fold</button>
-                    <button class="action-btn btn-check" onclick="playerAction('check')">Check</button>
-                    <button class="action-btn btn-call" onclick="playerAction('call')">Call</button>
-                    <button class="action-btn btn-raise" onclick="showRaiseInput()">Raise</button>
-                `;
-                actionButtons.style.display = 'flex';
-                
-                // Update button states
-                const checkBtn = actionButtons.querySelector('.btn-check');
-                const callBtn = actionButtons.querySelector('.btn-call');
-                const raiseBtn = actionButtons.querySelector('.btn-raise');
-                
-                const callAmount = currentGame.currentBet - myPlayer.bet;
-                
-                if (callAmount === 0) {
-                    checkBtn.style.display = 'block';
-                    callBtn.style.display = 'none';
-                } else {
-                    checkBtn.style.display = 'none';
-                    callBtn.style.display = 'block';
                     
-                    // Handle all-in situations
-                    if (callAmount >= myPlayer.chips) {
-                        callBtn.textContent = `All-in ${myPlayer.chips}`;
+                    // Update pot
+                    document.getElementById('potAmount').textContent = currentGame.pot;
+                    
+                    // Update blinds info
+                    if (currentGame.smallBlind && currentGame.bigBlind) {
+                        document.getElementById('blindsInfo').textContent = `${currentGame.smallBlind}/${currentGame.bigBlind}`;
+                    }
+                    
+                    // Update hand count
+                    if (currentGame.handCount) {
+                        document.getElementById('handCount').textContent = currentGame.handCount;
+                    }
+                    
+                    // Update community cards
+                    const communityContainer = document.getElementById('communityCards');
+                    communityContainer.innerHTML = '';
+                    
+                    // Clear any leftover cards during waiting or new hand
+                    if (currentGame.stage === 'waiting' || 
+                        (currentGame.stage === 'preflop' && (!currentGame.communityCards || currentGame.communityCards.length === 0))) {
+                        communityContainer.innerHTML = '';
+                    } else if (currentGame.communityCards) {
+                        currentGame.communityCards.forEach(card => {
+                            const cardEl = document.createElement('div');
+                            cardEl.className = `card ${suitColors[card.suit]}`;
+                            cardEl.textContent = `${card.rank}${card.suit}`;
+                            communityContainer.appendChild(cardEl);
+                        });
+                    }
+                    
+                    // Update game status
+                    updateGameStatus();
+                    
+                    // Update action buttons
+                    updateActionButtons();
+                }
+                
+                function updateGameStatus() {
+                    const statusEl = document.getElementById('gameStatus');
+                    
+                    if (currentGame.stage === 'waiting') {
+                        statusEl.textContent = 'Waiting for another player...';
+                    } else if (currentGame.stage === 'gameover') {
+                        statusEl.innerHTML = '<strong style="color: #e74c3c;">Game Over!</strong>';
+                    } else if (currentGame.stage === 'showdown') {
+                        // Show who won during showdown
+                        if (currentGame.lastWinner) {
+                            statusEl.innerHTML = `<strong style="color: #f39c12;">${currentGame.lastWinner.name} wins ${currentGame.lastWinner.amount} chips with ${currentGame.lastWinner.hand}!</strong><br><small style="color: #ecf0f1;">Dealing new hand...</small>`;
+                        } else {
+                            statusEl.textContent = 'Showdown!';
+                        }
                     } else {
-                        callBtn.textContent = `Call ${callAmount}`;
+                        const currentPlayer = currentGame.players[currentGame.currentPlayer];
+                        const isMyTurn = currentPlayer.id === playerId;
+                        
+                        // Vibrate on mobile when it's your turn (if supported)
+                        if (isMyTurn && isMobile && 'vibrate' in navigator && !statusEl.dataset.vibrated) {
+                            navigator.vibrate(200);
+                            statusEl.dataset.vibrated = 'true';
+                        } else if (!isMyTurn) {
+                            delete statusEl.dataset.vibrated;
+                        }
+                        
+                        // Show current stage
+                        const stageNames = {
+                            'preflop': 'Pre-Flop',
+                            'flop': 'Flop',
+                            'turn': 'Turn',
+                            'river': 'River'
+                        };
+                        
+                        const stageName = stageNames[currentGame.stage] || currentGame.stage;
+                        
+                        // Check if blinds were just posted
+                        if (currentGame.stage === 'preflop' && currentGame.pot > 0 && 
+                            (!currentGame.communityCards || currentGame.communityCards.length === 0) &&
+                            (!currentGame.playersActed || currentGame.playersActed.length === 0)) {
+                            const blindsPosted = `<small style="color: #f39c12;">💰 Blinds posted: ${currentGame.smallBlind}/${currentGame.bigBlind}</small><br>`;
+                            if (isMyTurn) {
+                                statusEl.innerHTML = blindsPosted + `<strong>${stageName}</strong> - ${isMobile ? '👆 ' : ''}Your turn to act`;
+                            } else {
+                                statusEl.innerHTML = blindsPosted + `<strong>${stageName}</strong> - Waiting for ${currentPlayer.name}...`;
+                            }
+                        } else {
+                            if (isMyTurn) {
+                                statusEl.innerHTML = `<strong>${stageName}</strong> - ${isMobile ? '👆 ' : ''}Your turn to act`;
+                            } else {
+                                statusEl.innerHTML = `<strong>${stageName}</strong> - Waiting for ${currentPlayer.name}...`;
+                            }
+                        }
+                        
+                        // Show current bet if any
+                        if (currentGame.currentBet > 0) {
+                            const myPlayer = currentGame.players.find(p => p.id === playerId);
+                            const callAmount = currentGame.currentBet - (myPlayer ? myPlayer.bet : 0);
+                            if (callAmount > 0) {
+                                statusEl.innerHTML += ` (To call: ${callAmount})`;
+                            }
+                        }
+                        
+                        // Show blind increase warning
+                        if (currentGame.handCount && currentGame.handCount % 5 === 4) {
+                            statusEl.innerHTML += '<br><small style="color: #e74c3c;">⚠️ Blinds will increase next hand!</small>';
+                        } else if (currentGame.handCount && currentGame.handCount % 5 === 1 && currentGame.stage === 'preflop') {
+                            statusEl.innerHTML += '<br><small style="color: #f39c12;">📈 Blinds just increased!</small>';
+                        }
+                        
+                        // Show last winner info if this is a new hand
+                        if (currentGame.lastWinner && currentGame.stage === 'preflop' && currentGame.pot > 0 && currentGame.pot <= (currentGame.smallBlind + currentGame.bigBlind)) {
+                            statusEl.innerHTML = `<small style="color: #f39c12;">Last hand: ${currentGame.lastWinner.name} won ${currentGame.lastWinner.amount} chips</small><br>` + statusEl.innerHTML;
+                        }
                     }
                 }
                 
-                // Disable raise if player doesn't have enough chips
-                if (myPlayer.chips <= callAmount) {
-                    raiseBtn.disabled = true;
-                } else {
-                    raiseBtn.disabled = false;
+                function updateActionButtons() {
+                    const actionButtons = document.getElementById('actionButtons');
+                    const betInput = document.getElementById('betInput');
+                    
+                    if (!currentGame || !currentGame.players) return;
+                    
+                    const currentPlayer = currentGame.players[currentGame.currentPlayer];
+                    const isMyTurn = currentPlayer && currentPlayer.id === playerId;
+                    const myPlayer = currentGame.players.find(p => p.id === playerId);
+                    
+                    // Check if we're in showdown and need to deal a new hand
+                    if (currentGame.stage === 'showdown' && currentGame.lastWinner) {
+                        // Show a "Deal New Hand" button as a fallback
+                        actionButtons.innerHTML = `
+                            <button class="action-btn btn-primary" onclick="manuallyDealNewHand()">Deal New Hand</button>
+                        `;
+                        actionButtons.style.display = 'flex';
+                        betInput.style.display = 'none';
+                        return;
+                    }
+                    
+                    if (isMyTurn && currentGame.stage !== 'waiting' && currentGame.stage !== 'showdown' && currentGame.stage !== 'gameover' && !myPlayer.folded) {
+                        // Reset to default action buttons
+                        actionButtons.innerHTML = `
+                            <button class="action-btn btn-fold" onclick="playerAction('fold')">Fold</button>
+                            <button class="action-btn btn-check" onclick="playerAction('check')">Check</button>
+                            <button class="action-btn btn-call" onclick="playerAction('call')">Call</button>
+                            <button class="action-btn btn-raise" onclick="showRaiseInput()">Raise</button>
+                        `;
+                        actionButtons.style.display = 'flex';
+                        
+                        // Update button states
+                        const checkBtn = actionButtons.querySelector('.btn-check');
+                        const callBtn = actionButtons.querySelector('.btn-call');
+                        const raiseBtn = actionButtons.querySelector('.btn-raise');
+                        
+                        const callAmount = currentGame.currentBet - myPlayer.bet;
+                        
+                        if (callAmount === 0) {
+                            checkBtn.style.display = 'block';
+                            callBtn.style.display = 'none';
+                        } else {
+                            checkBtn.style.display = 'none';
+                            callBtn.style.display = 'block';
+                            
+                            // Handle all-in situations
+                            if (callAmount >= myPlayer.chips) {
+                                callBtn.textContent = `All-in ${myPlayer.chips}`;
+                            } else {
+                                callBtn.textContent = `Call ${callAmount}`;
+                            }
+                        }
+                        
+                        // Disable raise if player doesn't have enough chips
+                        if (myPlayer.chips <= callAmount) {
+                            raiseBtn.disabled = true;
+                        } else {
+                            raiseBtn.disabled = false;
+                        }
+                    } else {
+                        actionButtons.style.display = 'none';
+                        betInput.style.display = 'none';
+                    }
                 }
-            } else {
-                actionButtons.style.display = 'none';
-                betInput.style.display = 'none';
-            }
-        }
-
-        window.showRaiseInput = function() {
-            document.getElementById('betInput').style.display = 'flex';
-            const myPlayer = currentGame.players.find(p => p.id === playerId);
-            const callAmount = currentGame.currentBet - myPlayer.bet;
-            
-            // Minimum raise must be at least the size of the big blind or the last raise amount
-            const minRaiseAmount = currentGame.bigBlind;
-            const minRaise = callAmount + minRaiseAmount;
-            const maxRaise = myPlayer.chips - callAmount;
-            
-            const raiseInput = document.getElementById('raiseAmount');
-            raiseInput.min = minRaise;
-            raiseInput.max = maxRaise;
-            raiseInput.value = minRaise;
-            raiseInput.placeholder = `Min: ${minRaise}, Max: ${maxRaise}`;
-            
-            // Auto-focus on mobile
-            if (isMobile) {
-                setTimeout(() => {
-                    raiseInput.focus();
-                    raiseInput.select();
-                }, 100);
-            }
-        }
-
-        window.playerAction = async function(action) {
-            // Prevent actions during showdown or game over
-            if (currentGame.stage === 'showdown' || currentGame.stage === 'gameover') {
-                return;
-            }
-            
-            const myPlayerIndex = currentGame.players.findIndex(p => p.id === playerId);
-            const myPlayer = currentGame.players[myPlayerIndex];
-            const gameRef = db.collection('games').doc(currentGame.id);
-            
-            try {
-                const updates = {
-                    players: currentGame.players,
-                    pot: currentGame.pot,
-                    currentBet: currentGame.currentBet,
-                    currentPlayer: currentGame.currentPlayer,
-                    stage: currentGame.stage,
-                    communityCards: currentGame.communityCards,
-                    deck: currentGame.deck,
-                    playersActed: currentGame.playersActed || []
-                };
-
-                let actionMessage = '';
-
-                switch (action) {
-                    case 'fold':
-                        myPlayer.folded = true;
-                        actionMessage = `${playerName} folded`;
-                        // When folding, we still count as having acted
-                        if (!updates.playersActed.includes(myPlayerIndex)) {
+                
+                window.showRaiseInput = function() {
+                    document.getElementById('betInput').style.display = 'flex';
+                    const myPlayer = currentGame.players.find(p => p.id === playerId);
+                    const callAmount = currentGame.currentBet - myPlayer.bet;
+                    
+                    // Minimum raise must be at least the size of the big blind or the last raise amount
+                    const minRaiseAmount = currentGame.bigBlind;
+                    const minRaise = callAmount + minRaiseAmount;
+                    const maxRaise = myPlayer.chips - callAmount;
+                    
+                    const raiseInput = document.getElementById('raiseAmount');
+                    raiseInput.min = minRaise;
+                    raiseInput.max = maxRaise;
+                    raiseInput.value = minRaise;
+                    raiseInput.placeholder = `Min: ${minRaise}, Max: ${maxRaise}`;
+                    
+                    // Auto-focus on mobile
+                    if (isMobile) {
+                        setTimeout(() => {
+                            raiseInput.focus();
+                            raiseInput.select();
+                        }, 100);
+                    }
+                }
+                
+                window.playerAction = async function(action) {
+                    // Prevent actions during showdown or game over
+                    if (currentGame.stage === 'showdown' || currentGame.stage === 'gameover') {
+                        return;
+                    }
+                    
+                    const myPlayerIndex = currentGame.players.findIndex(p => p.id === playerId);
+                    const myPlayer = currentGame.players[myPlayerIndex];
+                    const gameRef = db.collection('games').doc(currentGame.id);
+                    
+                    try {
+                        const updates = {
+                            players: currentGame.players,
+                            pot: currentGame.pot,
+                            currentBet: currentGame.currentBet,
+                            currentPlayer: currentGame.currentPlayer,
+                            stage: currentGame.stage,
+                            communityCards: currentGame.communityCards,
+                            deck: currentGame.deck,
+                            playersActed: currentGame.playersActed || []
+                        };
+                        
+                        let actionMessage = '';
+                        
+                        switch (action) {
+                            case 'fold':
+                                myPlayer.folded = true;
+                                actionMessage = `${playerName} folded`;
+                                // When folding, we still count as having acted
+                                if (!updates.playersActed.includes(myPlayerIndex)) {
+                                    updates.playersActed.push(myPlayerIndex);
+                                }
+                                break;
+                                
+                            case 'check':
+                                actionMessage = `${playerName} checked`;
+                                // No chips to add to pot
+                                break;
+                                
+                            case 'call':
+                                const callAmount = currentGame.currentBet - myPlayer.bet;
+                                const actualCallAmount = Math.min(callAmount, myPlayer.chips);
+                                
+                                myPlayer.chips -= actualCallAmount;
+                                myPlayer.bet += actualCallAmount;
+                                updates.pot = (updates.pot || 0) + actualCallAmount;
+                                
+                                if (actualCallAmount >= myPlayer.chips) {
+                                    actionMessage = `${playerName} went all-in with ${actualCallAmount} chips`;
+                                } else {
+                                    actionMessage = `${playerName} called ${actualCallAmount}`;
+                                }
+                                break;
+                                
+                            case 'raise':
+                                const raiseAmount = parseInt(document.getElementById('raiseAmount').value);
+                                if (isNaN(raiseAmount) || raiseAmount <= 0) {
+                                    alert('Please enter a valid raise amount');
+                                    return;
+                                }
+                                
+                                const callCost = currentGame.currentBet - myPlayer.bet;
+                                const totalCost = callCost + raiseAmount;
+                                
+                                if (totalCost <= myPlayer.chips) {
+                                    myPlayer.chips -= totalCost;
+                                    myPlayer.bet = currentGame.currentBet + raiseAmount;
+                                    updates.pot = (updates.pot || 0) + totalCost;
+                                    updates.currentBet = myPlayer.bet;
+                                    actionMessage = `${playerName} raised to ${updates.currentBet}`;
+                                    // When someone raises, only they have acted in this betting round
+                                    updates.playersActed = [myPlayerIndex];
+                                } else {
+                                    alert('Insufficient chips for this raise');
+                                    return;
+                                }
+                                document.getElementById('betInput').style.display = 'none';
+                                document.getElementById('raiseAmount').value = '';
+                                break;
+                        }
+                        
+                        // Send action message to chat
+                        if (actionMessage) {
+                            await sendSystemMessage(currentGame.id, actionMessage);
+                        }
+                        
+                        // Track that this player has acted (unless they raised, or already acted for fold)
+                        if (action !== 'raise' && action !== 'fold' && !updates.playersActed.includes(myPlayerIndex)) {
                             updates.playersActed.push(myPlayerIndex);
                         }
-                        break;
                         
-                    case 'check':
-                        actionMessage = `${playerName} checked`;
-                        // No chips to add to pot
-                        break;
-                        
-                    case 'call':
-                        const callAmount = currentGame.currentBet - myPlayer.bet;
-                        const actualCallAmount = Math.min(callAmount, myPlayer.chips);
-                        
-                        myPlayer.chips -= actualCallAmount;
-                        myPlayer.bet += actualCallAmount;
-                        updates.pot = (updates.pot || 0) + actualCallAmount;
-                        
-                        if (actualCallAmount >= myPlayer.chips) {
-                            actionMessage = `${playerName} went all-in with ${actualCallAmount} chips`;
+                        // Check if we need to advance to next stage
+                        if (shouldAdvanceStage(updates)) {
+                            advanceStage(updates);
                         } else {
-                            actionMessage = `${playerName} called ${actualCallAmount}`;
+                            // Move to next player
+                            let nextPlayer = (updates.currentPlayer + 1) % updates.players.length;
+                            
+                            // Skip folded players
+                            let attempts = 0;
+                            while (updates.players[nextPlayer].folded && attempts < updates.players.length) {
+                                nextPlayer = (nextPlayer + 1) % updates.players.length;
+                                attempts++;
+                            }
+                            
+                            // Safety check: if all players are folded except one (shouldn't happen but just in case)
+                            if (attempts >= updates.players.length) {
+                                advanceStage(updates);
+                            } else {
+                                updates.currentPlayer = nextPlayer;
+                            }
                         }
-                        break;
                         
-                    case 'raise':
-                        const raiseAmount = parseInt(document.getElementById('raiseAmount').value);
-                        if (isNaN(raiseAmount) || raiseAmount <= 0) {
-                            alert('Please enter a valid raise amount');
-                            return;
-                        }
-                        
-                        const callCost = currentGame.currentBet - myPlayer.bet;
-                        const totalCost = callCost + raiseAmount;
-                        
-                        if (totalCost <= myPlayer.chips) {
-                            myPlayer.chips -= totalCost;
-                            myPlayer.bet = currentGame.currentBet + raiseAmount;
-                            updates.pot = (updates.pot || 0) + totalCost;
-                            updates.currentBet = myPlayer.bet;
-                            actionMessage = `${playerName} raised to ${updates.currentBet}`;
-                            // When someone raises, only they have acted in this betting round
-                            updates.playersActed = [myPlayerIndex];
-                        } else {
-                            alert('Insufficient chips for this raise');
-                            return;
-                        }
-                        document.getElementById('betInput').style.display = 'none';
-                        document.getElementById('raiseAmount').value = '';
-                        break;
+                        await gameRef.update(updates);
+                    } catch (error) {
+                        console.error('Error performing action:', error);
+                        alert('Error performing action. Please try again.');
+                    }
                 }
-
-                // Send action message to chat
-                if (actionMessage) {
-                    await sendSystemMessage(currentGame.id, actionMessage);
-                }
-
-                // Track that this player has acted (unless they raised, or already acted for fold)
-                if (action !== 'raise' && action !== 'fold' && !updates.playersActed.includes(myPlayerIndex)) {
-                    updates.playersActed.push(myPlayerIndex);
-                }
-
-                // Check if we need to advance to next stage
-                if (shouldAdvanceStage(updates)) {
-                    advanceStage(updates);
-                } else {
-                    // Move to next player
-                    let nextPlayer = (updates.currentPlayer + 1) % updates.players.length;
+                
+                function shouldAdvanceStage(gameData) {
+                    const activePlayers = gameData.players.filter(p => !p.folded);
                     
-                    // Skip folded players
+                    // If only one player left, they win
+                    if (activePlayers.length === 1) {
+                        return true;
+                    }
+                    
+                    // Initialize playersActed if it doesn't exist
+                    if (!gameData.playersActed) {
+                        gameData.playersActed = [];
+                    }
+                    
+                    // Check if all active players have matched the current bet
+                    const allMatched = activePlayers.every(p => p.bet === gameData.currentBet || p.chips === 0);
+                    
+                    // Count active players who need to act
+                    const activePlayerIndices = gameData.players
+                        .map((p, i) => ({ player: p, index: i }))
+                        .filter(({ player }) => !player.folded)
+                        .map(({ index }) => index);
+                    
+                    // Check if all active players have acted
+                    const allActivePlayersActed = activePlayerIndices.every(index => 
+                        gameData.playersActed.includes(index)
+                    );
+                    
+                    // Advance if all active players have acted and all bets are matched
+                    return allActivePlayersActed && allMatched;
+                }
+                
+                async function advanceStage(gameData) {
+                    console.log('Advancing stage from:', gameData.stage);
+                    
+                    // Reset bets and players acted for new betting round
+                    gameData.players.forEach(p => p.bet = 0);
+                    gameData.currentBet = 0;
+                    gameData.playersActed = [];
+                    
+                    const activePlayers = gameData.players.filter(p => !p.folded);
+                    
+                    // If only one player remains, they win
+                    if (activePlayers.length === 1) {
+                        gameData.stage = 'showdown';
+                        await determineWinner(gameData);
+                        return;
+                    }
+                    
+                    // Set current player based on stage
+                    if (gameData.stage === 'preflop') {
+                        // Moving from preflop to flop - BB acts first (player 1 in heads-up)
+                        gameData.currentPlayer = 1;
+                    } else {
+                        // For all other streets, BB continues to act first
+                        gameData.currentPlayer = 1;
+                    }
+                    
+                    // Skip to active player if current player has folded
                     let attempts = 0;
-                    while (updates.players[nextPlayer].folded && attempts < updates.players.length) {
-                        nextPlayer = (nextPlayer + 1) % updates.players.length;
+                    while (gameData.players[gameData.currentPlayer].folded && attempts < gameData.players.length) {
+                        gameData.currentPlayer = (gameData.currentPlayer + 1) % gameData.players.length;
                         attempts++;
                     }
                     
-                    // Safety check: if all players are folded except one (shouldn't happen but just in case)
-                    if (attempts >= updates.players.length) {
-                        advanceStage(updates);
-                    } else {
-                        updates.currentPlayer = nextPlayer;
-                    }
-                }
-
-                await gameRef.update(updates);
-            } catch (error) {
-                console.error('Error performing action:', error);
-                alert('Error performing action. Please try again.');
-            }
-        }
-
-        function shouldAdvanceStage(gameData) {
-            const activePlayers = gameData.players.filter(p => !p.folded);
-            
-            // If only one player left, they win
-            if (activePlayers.length === 1) {
-                return true;
-            }
-            
-            // Initialize playersActed if it doesn't exist
-            if (!gameData.playersActed) {
-                gameData.playersActed = [];
-            }
-            
-            // Check if all active players have matched the current bet
-            const allMatched = activePlayers.every(p => p.bet === gameData.currentBet || p.chips === 0);
-            
-            // Count active players who need to act
-            const activePlayerIndices = gameData.players
-                .map((p, i) => ({ player: p, index: i }))
-                .filter(({ player }) => !player.folded)
-                .map(({ index }) => index);
-            
-            // Check if all active players have acted
-            const allActivePlayersActed = activePlayerIndices.every(index => 
-                gameData.playersActed.includes(index)
-            );
-            
-            // Advance if all active players have acted and all bets are matched
-            return allActivePlayersActed && allMatched;
-        }
-
-        async function advanceStage(gameData) {
-            console.log('Advancing stage from:', gameData.stage);
-            
-            // Reset bets and players acted for new betting round
-            gameData.players.forEach(p => p.bet = 0);
-            gameData.currentBet = 0;
-            gameData.playersActed = [];
-            
-            const activePlayers = gameData.players.filter(p => !p.folded);
-            
-            // If only one player remains, they win
-            if (activePlayers.length === 1) {
-                gameData.stage = 'showdown';
-                await determineWinner(gameData);
-                return;
-            }
-            
-            // Set current player based on stage
-            if (gameData.stage === 'preflop') {
-                // Moving from preflop to flop - BB acts first (player 1 in heads-up)
-                gameData.currentPlayer = 1;
-            } else {
-                // For all other streets, BB continues to act first
-                gameData.currentPlayer = 1;
-            }
-            
-            // Skip to active player if current player has folded
-            let attempts = 0;
-            while (gameData.players[gameData.currentPlayer].folded && attempts < gameData.players.length) {
-                gameData.currentPlayer = (gameData.currentPlayer + 1) % gameData.players.length;
-                attempts++;
-            }
-            
-            let stageMessage = '';
-            
-            switch (gameData.stage) {
-                case 'preflop':
-                    gameData.stage = 'flop';
-                    // Deal 3 community cards
-                    for (let i = 0; i < 3; i++) {
-                        gameData.communityCards.push(gameData.deck.pop());
-                    }
-                    stageMessage = '🃏 Dealing the flop...';
-                    console.log('Dealt flop:', gameData.communityCards.slice(0, 3));
-                    break;
+                    let stageMessage = '';
                     
-                case 'flop':
-                    gameData.stage = 'turn';
-                    // Deal 1 card
-                    gameData.communityCards.push(gameData.deck.pop());
-                    stageMessage = '🃏 Dealing the turn...';
-                    console.log('Dealt turn:', gameData.communityCards[3]);
-                    break;
-                    
-                case 'turn':
-                    gameData.stage = 'river';
-                    // Deal 1 card
-                    gameData.communityCards.push(gameData.deck.pop());
-                    stageMessage = '🃏 Dealing the river...';
-                    console.log('Dealt river:', gameData.communityCards[4]);
-                    break;
-                    
-                case 'river':
-                    gameData.stage = 'showdown';
-                    stageMessage = '🎯 Showdown!';
-                    await determineWinner(gameData);
-                    break;
-            }
-            
-            // Send stage message to chat
-            if (stageMessage && currentGame && currentGame.id) {
-                await sendSystemMessage(currentGame.id, stageMessage);
-            }
-            
-            console.log('Advanced to stage:', gameData.stage, 'Current player:', gameData.currentPlayer);
-        }
-
-        async function determineWinner(gameData) {
-            const activePlayers = gameData.players.filter(p => !p.folded);
-            
-            if (activePlayers.length === 1) {
-                // Winner by default (everyone else folded)
-                const winner = activePlayers[0];
-                winner.chips += gameData.pot;
-                
-                // Update game status
-                gameData.lastWinner = {
-                    name: winner.name,
-                    amount: gameData.pot,
-                    hand: 'Everyone folded'
-                };
-                
-                // Send winner message
-                if (currentGame && currentGame.id) {
-                    await sendSystemMessage(currentGame.id, `🏆 ${winner.name} wins ${gameData.pot} chips (everyone folded)`);
-                }
-                
-                // Check for bankruptcy
-                await checkForBankruptcy(gameData);
-            } else {
-                // Evaluate hands
-                const playerHands = activePlayers.map(player => ({
-                    player,
-                    hand: evaluateHand([...player.cards, ...gameData.communityCards])
-                }));
-                
-                // Sort by hand rank
-                playerHands.sort((a, b) => compareHands(b.hand, a.hand));
-                
-                const winner = playerHands[0].player;
-                
-                // Give pot to winner
-                winner.chips += gameData.pot;
-                
-                // Update game status to show who won
-                gameData.lastWinner = {
-                    name: winner.name,
-                    amount: gameData.pot,
-                    hand: playerHands[0].hand.name
-                };
-                
-                // Send winner message
-                if (currentGame && currentGame.id) {
-                    await sendSystemMessage(currentGame.id, `🏆 ${winner.name} wins ${gameData.pot} chips with ${playerHands[0].hand.name}`);
-                }
-                
-                // Check for bankruptcy
-                await checkForBankruptcy(gameData);
-            }
-        }
-        
-        async function checkForBankruptcy(gameData) {
-            const bankruptPlayer = gameData.players.find(p => p.chips === 0);
-            
-            if (bankruptPlayer) {
-                // Someone is bankrupt - show final winner
-                const winner = gameData.players.find(p => p.chips > 0);
-                
-                // Send game over message
-                if (currentGame && currentGame.id) {
-                    await sendSystemMessage(currentGame.id, `💥 GAME OVER! ${winner.name} wins! ${bankruptPlayer.name} went bankrupt!`);
-                }
-                
-                // Update Firestore first
-                const gameRef = db.collection('games').doc(currentGame.id);
-                await gameRef.update({
-                    players: gameData.players,
-                    stage: 'gameover',
-                    lastWinner: gameData.lastWinner,
-                    pot: gameData.pot
-                });
-                
-                // Then show the winner popup
-                showFinalWinner(winner, bankruptPlayer);
-            } else {
-                // No one bankrupt - show winner briefly then start new hand
-                console.log('Hand complete - Winner:', gameData.lastWinner.name, 'won', gameData.lastWinner.amount);
-                
-                // First update to showdown to display the winner
-                const gameRef = db.collection('games').doc(currentGame.id);
-                await gameRef.update({
-                    players: gameData.players,
-                    stage: 'showdown',
-                    lastWinner: gameData.lastWinner,
-                    pot: gameData.pot
-                });
-                
-                // Wait a brief moment to show the winner, then start new hand
-                setTimeout(async () => {
-                    console.log('Starting new hand...');
-                    
-                    // Get fresh game data to avoid conflicts
-                    const gameDoc = await gameRef.get();
-                    const freshGameData = gameDoc.data();
-                    
-                    // Reset the game state for new hand
-                    resetGame(freshGameData);
-                    
-                    // Send new hand message
-                    if (currentGame && currentGame.id) {
-                        await sendSystemMessage(currentGame.id, `🎲 Starting hand #${freshGameData.handCount}! Blinds: ${freshGameData.smallBlind}/${freshGameData.bigBlind}`);
-                    }
-                    
-                    console.log('After resetGame and dealCards for new hand:');
-                    console.log('Player 0:', freshGameData.players[0].name, 'Chips:', freshGameData.players[0].chips, 'Bet:', freshGameData.players[0].bet);
-                    console.log('Player 1:', freshGameData.players[1].name, 'Chips:', freshGameData.players[1].chips, 'Bet:', freshGameData.players[1].bet);
-                    console.log('Pot:', freshGameData.pot, 'Current Bet:', freshGameData.currentBet);
-                    console.log('Stage:', freshGameData.stage, 'Current Player:', freshGameData.currentPlayer);
-                    
-                    // Update Firestore with the new game state
-                    await gameRef.update({
-                        players: freshGameData.players,
-                        deck: freshGameData.deck,
-                        communityCards: freshGameData.communityCards,
-                        pot: freshGameData.pot,
-                        currentBet: freshGameData.currentBet,
-                        currentPlayer: freshGameData.currentPlayer,
-                        stage: freshGameData.stage,
-                        playersActed: freshGameData.playersActed,
-                        handCount: freshGameData.handCount,
-                        smallBlind: freshGameData.smallBlind,
-                        bigBlind: freshGameData.bigBlind,
-                        lastWinner: freshGameData.lastWinner
-                    });
-                    
-                    console.log('Firestore updated with new hand data');
-                }, 1500); // 1.5 second delay to show winner
-            }
-        }
-        
-        function showFinalWinner(winner, loser) {
-            const announcement = document.createElement('div');
-            announcement.className = 'winner-announcement';
-            announcement.innerHTML = `
-                <h2>🏆 Game Over! 🏆</h2>
-                <p style="font-size: 2rem; color: #f39c12; margin: 20px 0;">${winner.name} Wins!</p>
-                <p>${loser.name} has gone bankrupt</p>
-                <p style="margin-top: 10px; font-size: 0.9rem; color: rgba(255, 255, 255, 0.7);">
-                    Game ended at blinds ${currentGame.smallBlind}/${currentGame.bigBlind}
-                </p>
-                <p style="margin-top: 20px;">Final chip count: <strong>${winner.chips}</strong></p>
-                <button class="btn btn-primary" onclick="startNewMatch()">New Game</button>
-                <button class="btn btn-secondary" onclick="returnToLobby()">Return to Lobby</button>
-            `;
-            document.body.appendChild(announcement);
-        }
-        
-        window.startNewMatch = async function() {
-            // Close the announcement
-            const announcement = document.querySelector('.winner-announcement');
-            if (announcement) {
-                announcement.remove();
-            }
-            
-            // Reset both players to starting chips
-            if (currentGame && currentGame.players) {
-                currentGame.players.forEach(player => {
-                    player.chips = 5000;
-                    player.cards = [];
-                    player.bet = 0;
-                    player.folded = false;
-                });
-                
-                // Reset blinds and hand count
-                currentGame.smallBlind = 25;
-                currentGame.bigBlind = 50;
-                currentGame.handCount = 0;
-                currentGame.pot = 0;
-                currentGame.currentBet = 0;
-                currentGame.playersActed = [];
-                
-                // Clear the last winner and reset stage
-                currentGame.lastWinner = null;
-                currentGame.stage = 'preflop';
-                
-                // Create new deck
-                currentGame.deck = createDeck();
-                currentGame.communityCards = [];
-                currentGame.currentPlayer = 0;
-                
-                // Deal cards and post blinds for the new game
-                dealCards(currentGame);
-                
-                // Send new game message
-                await sendSystemMessage(currentGame.id, '🎮 New game started! Each player has 5000 chips.');
-                
-                console.log('Starting new match after bankruptcy:');
-                console.log('Player 0:', currentGame.players[0].name, 'Chips:', currentGame.players[0].chips, 'Bet:', currentGame.players[0].bet);
-                console.log('Player 1:', currentGame.players[1].name, 'Chips:', currentGame.players[1].chips, 'Bet:', currentGame.players[1].bet);
-                console.log('Pot:', currentGame.pot, 'Current Bet:', currentGame.currentBet);
-                
-                // Update the game in Firestore with all fields
-                const gameRef = db.collection('games').doc(currentGame.id);
-                gameRef.update({
-                    players: currentGame.players,
-                    deck: currentGame.deck,
-                    communityCards: currentGame.communityCards,
-                    pot: currentGame.pot,
-                    currentBet: currentGame.currentBet,
-                    currentPlayer: currentGame.currentPlayer,
-                    stage: currentGame.stage,
-                    playersActed: currentGame.playersActed,
-                    handCount: currentGame.handCount,
-                    smallBlind: currentGame.smallBlind,
-                    bigBlind: currentGame.bigBlind,
-                    lastWinner: currentGame.lastWinner
-                });
-            }
-        }
-        
-        window.returnToLobby = function() {
-            // Close the announcement
-            const announcement = document.querySelector('.winner-announcement');
-            if (announcement) {
-                announcement.remove();
-            }
-            
-            // Leave the game
-            leaveGame();
-        }
-
-        function evaluateHoleCards(cards) {
-            if (cards.length !== 2) return { rank: 0, name: 'Invalid' };
-            
-            const rank1 = getRankValue(cards[0].rank);
-            const rank2 = getRankValue(cards[1].rank);
-            const suited = cards[0].suit === cards[1].suit;
-            
-            const highRank = Math.max(rank1, rank2);
-            const lowRank = Math.min(rank1, rank2);
-            
-            // Pocket pair
-            if (rank1 === rank2) {
-                const rankNames = { 
-                    14: 'Aces', 13: 'Kings', 12: 'Queens', 11: 'Jacks',
-                    10: 'Tens', 9: 'Nines', 8: 'Eights', 7: 'Sevens',
-                    6: 'Sixes', 5: 'Fives', 4: 'Fours', 3: 'Threes', 2: 'Twos'
-                };
-                const pairName = rankNames[rank1] || `${cards[0].rank}s`;
-                return { rank: 1, name: `Pocket ${pairName}` };
-            }
-            
-            // High cards
-            const cardNames = { 14: 'Ace', 13: 'King', 12: 'Queen', 11: 'Jack', 10: 'Ten' };
-            const highCardName = cardNames[highRank] || highRank;
-            const lowCardName = cardNames[lowRank] || lowRank;
-            
-            // Special combinations
-            if (highRank === 14 && lowRank === 13) {
-                return { rank: 0.9, name: suited ? 'Big Slick (suited)' : 'Big Slick' };
-            }
-            
-            // Connected cards
-            const gap = highRank - lowRank;
-            if (gap === 1) {
-                return { rank: 0.5, name: `${highCardName}-${lowCardName} ${suited ? 'suited' : 'connectors'}` };
-            }
-            
-            // Suited cards
-            if (suited) {
-                return { rank: 0.3, name: `${highCardName}-${lowCardName} suited` };
-            }
-            
-            // Default
-            return { rank: 0, name: `${highCardName}-${lowCardName}` };
-        }
-
-        function evaluateHand(cards) {
-            if (cards.length < 5) return { rank: 0, name: 'Incomplete' };
-            
-            // Get all possible 5-card combinations
-            const combinations = getCombinations(cards, 5);
-            let bestHand = { rank: -1, name: 'High Card' };
-            
-            // Evaluate each combination
-            for (const combo of combinations) {
-                const hand = evaluateFiveCards(combo);
-                if (hand.rank > bestHand.rank) {
-                    bestHand = hand;
-                }
-            }
-            
-            return bestHand;
-        }
-        
-        function getCombinations(arr, size) {
-            const combinations = [];
-            
-            function combine(start, combo) {
-                if (combo.length === size) {
-                    combinations.push([...combo]);
-                    return;
-                }
-                
-                for (let i = start; i < arr.length; i++) {
-                    combo.push(arr[i]);
-                    combine(i + 1, combo);
-                    combo.pop();
-                }
-            }
-            
-            combine(0, []);
-            return combinations;
-        }
-        
-        function evaluateFiveCards(cards) {
-            const ranks = cards.map(c => getRankValue(c.rank));
-            const suits = cards.map(c => c.suit);
-            
-            // Sort ranks in descending order
-            ranks.sort((a, b) => b - a);
-            
-            // Count occurrences
-            const rankCounts = {};
-            ranks.forEach(rank => {
-                rankCounts[rank] = (rankCounts[rank] || 0) + 1;
-            });
-            
-            const counts = Object.values(rankCounts).sort((a, b) => b - a);
-            const uniqueRanks = Object.keys(rankCounts).map(Number).sort((a, b) => b - a);
-            
-            // Check for flush
-            const suitCounts = {};
-            suits.forEach(suit => {
-                suitCounts[suit] = (suitCounts[suit] || 0) + 1;
-            });
-            const isFlush = Object.values(suitCounts).some(count => count === 5);
-            
-            // Check for straight
-            const isStraight = checkFiveStraight(uniqueRanks);
-            const isWheel = uniqueRanks.length === 5 && 
-                          uniqueRanks[0] === 14 && uniqueRanks[1] === 5 && 
-                          uniqueRanks[2] === 4 && uniqueRanks[3] === 3 && uniqueRanks[4] === 2;
-            
-            // Determine hand rank
-            if ((isStraight || isWheel) && isFlush) {
-                if (isStraight && uniqueRanks[0] === 14 && uniqueRanks[1] === 13) {
-                    return { rank: 9, name: 'Royal Flush' };
-                }
-                return { rank: 8, name: 'Straight Flush' };
-            }
-            
-            // Get card names for better display
-            const cardNames = { 14: 'Aces', 13: 'Kings', 12: 'Queens', 11: 'Jacks', 10: 'Tens',
-                               9: 'Nines', 8: 'Eights', 7: 'Sevens', 6: 'Sixes', 5: 'Fives',
-                               4: 'Fours', 3: 'Threes', 2: 'Twos' };
-            
-            if (counts[0] === 4) {
-                const quadRank = parseInt(Object.keys(rankCounts).find(key => rankCounts[key] === 4));
-                const quadName = cardNames[quadRank] || `${quadRank}s`;
-                return { rank: 7, name: `Four ${quadName}` };
-            }
-            
-            if (counts[0] === 3 && counts[1] === 2) {
-                const tripRank = parseInt(Object.keys(rankCounts).find(key => rankCounts[key] === 3));
-                const pairRank = parseInt(Object.keys(rankCounts).find(key => rankCounts[key] === 2));
-                const tripName = cardNames[tripRank] || `${tripRank}s`;
-                const pairName = cardNames[pairRank] || `${pairRank}s`;
-                return { rank: 6, name: `Full House` };
-            }
-            
-            if (isFlush) return { rank: 5, name: 'Flush' };
-            if (isStraight || isWheel) return { rank: 4, name: 'Straight' };
-            
-            if (counts[0] === 3) {
-                const tripRank = parseInt(Object.keys(rankCounts).find(key => rankCounts[key] === 3));
-                const tripName = cardNames[tripRank] || `${tripRank}s`;
-                return { rank: 3, name: `Three ${tripName}` };
-            }
-            
-            if (counts[0] === 2 && counts[1] === 2) {
-                return { rank: 2, name: `Two Pair` };
-            }
-            
-            if (counts[0] === 2) {
-                const pairRank = parseInt(Object.keys(rankCounts).find(key => rankCounts[key] === 2));
-                const pairName = cardNames[pairRank] || `${pairRank}s`;
-                return { rank: 1, name: `Pair of ${pairName}` };
-            }
-            
-            // High card - include the high card value
-            const highCard = ranks[0];
-            const highCardNames = { 14: 'Ace', 13: 'King', 12: 'Queen', 11: 'Jack', 10: 'Ten' };
-            const highCardName = highCardNames[highCard] || highCard;
-            return { rank: 0, name: `${highCardName} High` };
-        }
-        
-        function checkFiveStraight(uniqueRanks) {
-            if (uniqueRanks.length !== 5) return false;
-            
-            for (let i = 0; i < 4; i++) {
-                if (uniqueRanks[i] - uniqueRanks[i + 1] !== 1) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        function getRankValue(rank) {
-            const values = { 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
-            return values[rank] || parseInt(rank);
-        }
-
-        function compareHands(a, b) {
-            if (a.rank !== b.rank) return a.rank - b.rank;
-            if (a.highCard && b.highCard) return a.highCard - b.highCard;
-            return 0;
-        }
-
-        function showWinner(winner, pot, hand) {
-            const announcement = document.createElement('div');
-            announcement.className = 'winner-announcement';
-            announcement.innerHTML = `
-                <h2>🎉 Winner! 🎉</h2>
-                <p>${winner.name} wins ${pot} chips!</p>
-                ${hand ? `<p style="color: #f39c12; font-size: 1.3rem;">With: ${hand.name}</p>` : ''}
-                <button class="btn btn-primary" onclick="closeWinnerAnnouncement()">Continue</button>
-            `;
-            document.body.appendChild(announcement);
-        }
-
-        function closeWinnerAnnouncement() {
-            const announcement = document.querySelector('.winner-announcement');
-            if (announcement) {
-                announcement.remove();
-            }
-        }
-
-        function resetGame(gameData) {
-            console.log('=== RESETTING GAME FOR NEW HAND ===');
-            console.log('Before rotation - Player 0:', gameData.players[0].name, 'Player 1:', gameData.players[1].name);
-            
-            // Rotate dealer position (swap players for heads-up)
-            if (gameData.players.length === 2) {
-                // Swap player positions to rotate dealer/blinds
-                [gameData.players[0], gameData.players[1]] = [gameData.players[1], gameData.players[0]];
-                console.log('After rotation - Player 0 (new SB/Dealer):', gameData.players[0].name, 'Player 1 (new BB):', gameData.players[1].name);
-            }
-            
-            // Reset for next hand
-            gameData.deck = createDeck();
-            gameData.communityCards = [];
-            gameData.pot = 0;
-            gameData.currentBet = 0;
-            gameData.currentPlayer = 0;
-            gameData.stage = 'preflop';
-            gameData.playersActed = [];
-            
-            gameData.players.forEach(player => {
-                player.cards = [];
-                player.bet = 0;
-                player.folded = false;
-            });
-            
-            // Only deal if no one is bankrupt
-            const bankruptPlayer = gameData.players.find(p => p.chips === 0);
-            if (!bankruptPlayer) {
-                try {
-                    dealCards(gameData);
-                    console.log('New hand dealt successfully - Pot after blinds:', gameData.pot);
-                } catch (error) {
-                    console.error('Error dealing cards:', error);
-                }
-            }
-        }
-        
-        async function manuallyDealNewHand() {
-            if (!currentGame || currentGame.stage !== 'showdown') return;
-            
-            console.log('Manually dealing new hand...');
-            
-            try {
-                const gameRef = db.collection('games').doc(currentGame.id);
-                const gameDoc = await gameRef.get();
-                const gameData = gameDoc.data();
-                
-                // Reset the game state for new hand
-                resetGame(gameData);
-                
-                // Send new hand message
-                await sendSystemMessage(currentGame.id, `🎲 Starting hand #${gameData.handCount}! Blinds: ${gameData.smallBlind}/${gameData.bigBlind}`);
-                
-                // Update Firestore with the new game state
-                await gameRef.update({
-                    players: gameData.players,
-                    deck: gameData.deck,
-                    communityCards: gameData.communityCards,
-                    pot: gameData.pot,
-                    currentBet: gameData.currentBet,
-                    currentPlayer: gameData.currentPlayer,
-                    stage: gameData.stage,
-                    playersActed: gameData.playersActed,
-                    handCount: gameData.handCount,
-                    smallBlind: gameData.smallBlind,
-                    bigBlind: gameData.bigBlind,
-                    lastWinner: gameData.lastWinner
-                });
-                
-                console.log('New hand dealt manually');
-            } catch (error) {
-                console.error('Error dealing new hand:', error);
-                alert('Error dealing new hand. Please try again.');
-            }
-        }
-
-        // Chat functionality
-        function startChatListener(roomCode) {
-            if (chatListener) {
-                chatListener();
-            }
-
-            console.log('Starting chat listener for room:', roomCode);
-            
-            chatListener = db.collection('games').doc(roomCode).collection('messages')
-                .orderBy('timestamp', 'asc')
-                .onSnapshot((snapshot) => {
-                    snapshot.docChanges().forEach((change) => {
-                        if (change.type === 'added') {
-                            const message = change.doc.data();
-                            displayMessage(message);
-                            
-                            // Update unread count if chat is hidden and message is not from current user
-                            if (isMobile && !document.getElementById('chatContainer').classList.contains('mobile-visible') && 
-                                message.userId !== playerId) {
-                                unreadMessages++;
-                                updateChatBadge();
+                    switch (gameData.stage) {
+                        case 'preflop':
+                            gameData.stage = 'flop';
+                            // Deal 3 community cards
+                            for (let i = 0; i < 3; i++) {
+                                gameData.communityCards.push(gameData.deck.pop());
                             }
-                        }
-                    });
-                }, (error) => {
-                    console.error('Error listening to chat updates:', error);
-                });
-        }
-
-        function displayMessage(message) {
-            const messagesContainer = document.getElementById('chatMessages');
-            const messageEl = document.createElement('div');
-            
-            const isOwn = message.userId === playerId;
-            const isSystem = message.type === 'system';
-            
-            messageEl.className = `chat-message ${isOwn ? 'own' : ''} ${isSystem ? 'system' : ''}`;
-            
-            if (isSystem) {
-                messageEl.innerHTML = `
-                    <div class="message-content">
-                        <div class="message-text">${message.text}</div>
-                        <div class="message-time">${formatTime(message.timestamp)}</div>
-                    </div>
-                `;
-            } else {
-                messageEl.innerHTML = `
-                    ${!isOwn ? `<img class="message-avatar" src="${message.userAvatar}" onerror="this.src='https://www.gravatar.com/avatar/?d=mp&s=200'">` : ''}
-                    <div class="message-content">
-                        <div class="message-author">${message.userName}</div>
-                        <div class="message-text">${message.text}</div>
-                        <div class="message-time">${formatTime(message.timestamp)}</div>
-                    </div>
-                    ${isOwn ? `<img class="message-avatar" src="${message.userAvatar}" onerror="this.src='https://www.gravatar.com/avatar/?d=mp&s=200'">` : ''}
-                `;
-            }
-            
-            messagesContainer.appendChild(messageEl);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
-
-        function formatTime(timestamp) {
-            if (!timestamp) return '';
-            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-            const hours = date.getHours().toString().padStart(2, '0');
-            const minutes = date.getMinutes().toString().padStart(2, '0');
-            return `${hours}:${minutes}`;
-        }
-
-        async function sendMessage() {
-            const input = document.getElementById('chatInput');
-            const text = input.value.trim();
-            
-            if (!text || !currentGame || !currentGame.id) return;
-            
-            try {
-                await db.collection('games').doc(currentGame.id).collection('messages').add({
-                    text: text,
-                    userId: playerId,
-                    userName: playerName,
-                    userAvatar: playerPhotoURL,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                    type: 'user'
-                });
-                
-                input.value = '';
-            } catch (error) {
-                console.error('Error sending message:', error);
-            }
-        }
-
-        async function sendSystemMessage(roomCode, text) {
-            if (!roomCode) return;
-            
-            try {
-                await db.collection('games').doc(roomCode).collection('messages').add({
-                    text: text,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                    type: 'system'
-                });
-            } catch (error) {
-                console.error('Error sending system message:', error);
-            }
-        }
-
-        function toggleMobileChat() {
-            const chatContainer = document.getElementById('chatContainer');
-            const isVisible = chatContainer.classList.contains('mobile-visible');
-            
-            if (isVisible) {
-                chatContainer.classList.remove('mobile-visible');
-            } else {
-                chatContainer.classList.add('mobile-visible');
-                // Reset unread count
-                unreadMessages = 0;
-                updateChatBadge();
-                // Focus input
-                setTimeout(() => {
-                    document.getElementById('chatInput').focus();
-                }, 100);
-            }
-        }
-
-        function updateChatBadge() {
-            const badge = document.getElementById('chatBadge');
-            if (unreadMessages > 0) {
-                badge.textContent = unreadMessages > 9 ? '9+' : unreadMessages;
-                badge.style.display = 'flex';
-            } else {
-                badge.style.display = 'none';
-            }
-        }
-
-        // Chat input handling
-        document.addEventListener('DOMContentLoaded', () => {
-            const chatInput = document.getElementById('chatInput');
-            const chatSendBtn = document.getElementById('chatSendBtn');
-            
-            // Send message on Enter
-            chatInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
+                            stageMessage = '🃏 Dealing the flop...';
+                            console.log('Dealt flop:', gameData.communityCards.slice(0, 3));
+                            break;
+                            
+                        case 'flop':
+                            gameData.stage = 'turn';
+                            // Deal 1 card
+                            gameData.communityCards.push(gameData.deck.pop());
+                            stageMessage = '🃏 Dealing the turn...';
+                            console.log('Dealt turn:', gameData.communityCards[3]);
+                            break;
+                            
+                        case 'turn':
+                            gameData.stage = 'river';
+                            // Deal 1 card
+                            gameData.communityCards.push(gameData.deck.pop());
+                            stageMessage = '🃏 Dealing the river...';
+                            console.log('Dealt river:', gameData.communityCards[4]);
+                            break;
+                            
+                        case 'river':
+                            gameData.stage = 'showdown';
+                            stageMessage = '🎯 Showdown!';
+                            await determineWinner(gameData);
+                            break;
+                    }
+                    
+                    // Send stage message to chat
+                    if (stageMessage && currentGame && currentGame.id) {
+                        await sendSystemMessage(currentGame.id, stageMessage);
+                    }
+                    
+                    console.log('Advanced to stage:', gameData.stage, 'Current player:', gameData.currentPlayer);
                 }
-            });
-            
-            // Update send button state
-            chatInput.addEventListener('input', () => {
-                chatSendBtn.disabled = !chatInput.value.trim();
-            });
-        });
+                
+                async function determineWinner(gameData) {
+                    const activePlayers = gameData.players.filter(p => !p.folded);
+                    
+                    if (activePlayers.length === 1) {
+                        // Winner by default (everyone else folded)
+                        const winner = activePlayers[0];
+                        winner.chips += gameData.pot;
+                        
+                        // Update game status
+                        gameData.lastWinner = {
+                            name: winner.name,
+                            amount: gameData.pot,
+                            hand: 'Everyone folded'
+                        };
+                        
+                        // Send winner message
+                        if (currentGame && currentGame.id) {
+                            await sendSystemMessage(currentGame.id, `🏆 ${winner.name} wins ${gameData.pot} chips (everyone folded)`);
+                        }
+                        
+                        // Check for bankruptcy
+                        await checkForBankruptcy(gameData);
+                    } else {
+                        // Evaluate hands
+                        const playerHands = activePlayers.map(player => ({
+                            player,
+                            hand: evaluateHand([...player.cards, ...gameData.communityCards])
+                        }));
+                        
+                        // Sort by hand rank
+                        playerHands.sort((a, b) => compareHands(b.hand, a.hand));
+                        
+                        const winner = playerHands[0].player;
+                        
+                        // Give pot to winner
+                        winner.chips += gameData.pot;
+                        
+                        // Update game status to show who won
+                        gameData.lastWinner = {
+                            name: winner.name,
+                            amount: gameData.pot,
+                            hand: playerHands[0].hand.name
+                        };
+                        
+                        // Send winner message
+                        if (currentGame && currentGame.id) {
+                            await sendSystemMessage(currentGame.id, `🏆 ${winner.name} wins ${gameData.pot} chips with ${playerHands[0].hand.name}`);
+                        }
+                        
+                        // Check for bankruptcy
+                        await checkForBankruptcy(gameData);
+                    }
+                }
+                
+                async function checkForBankruptcy(gameData) {
+                    const bankruptPlayer = gameData.players.find(p => p.chips === 0);
+                    
+                    if (bankruptPlayer) {
+                        // Someone is bankrupt - show final winner
+                        const winner = gameData.players.find(p => p.chips > 0);
+                        
+                        // Send game over message
+                        if (currentGame && currentGame.id) {
+                            await sendSystemMessage(currentGame.id, `💥 GAME OVER! ${winner.name} wins! ${bankruptPlayer.name} went bankrupt!`);
+                        }
+                        
+                        // Update Firestore first
+                        const gameRef = db.collection('games').doc(currentGame.id);
+                        await gameRef.update({
+                            players: gameData.players,
+                            stage: 'gameover',
+                            lastWinner: gameData.lastWinner,
+                            pot: gameData.pot
+                        });
+                        
+                        // Then show the winner popup
+                        showFinalWinner(winner, bankruptPlayer);
+                    } else {
+                        // No one bankrupt - show winner briefly then start new hand
+                        console.log('Hand complete - Winner:', gameData.lastWinner.name, 'won', gameData.lastWinner.amount);
+                        
+                        // First update to showdown to display the winner
+                        const gameRef = db.collection('games').doc(currentGame.id);
+                        await gameRef.update({
+                            players: gameData.players,
+                            stage: 'showdown',
+                            lastWinner: gameData.lastWinner,
+                            pot: gameData.pot
+                        });
+                        
+                        // Wait a brief moment to show the winner, then start new hand
+                        setTimeout(async () => {
+                            console.log('Starting new hand...');
+                            
+                            // Get fresh game data to avoid conflicts
+                            const gameDoc = await gameRef.get();
+                            const freshGameData = gameDoc.data();
+                            
+                            // Reset the game state for new hand
+                            resetGame(freshGameData);
+                            
+                            // Send new hand message
+                            if (currentGame && currentGame.id) {
+                                await sendSystemMessage(currentGame.id, `🎲 Starting hand #${freshGameData.handCount}! Blinds: ${freshGameData.smallBlind}/${freshGameData.bigBlind}`);
+                            }
+                            
+                            console.log('After resetGame and dealCards for new hand:');
+                            console.log('Player 0:', freshGameData.players[0].name, 'Chips:', freshGameData.players[0].chips, 'Bet:', freshGameData.players[0].bet);
+                            console.log('Player 1:', freshGameData.players[1].name, 'Chips:', freshGameData.players[1].chips, 'Bet:', freshGameData.players[1].bet);
+                            console.log('Pot:', freshGameData.pot, 'Current Bet:', freshGameData.currentBet);
+                            console.log('Stage:', freshGameData.stage, 'Current Player:', freshGameData.currentPlayer);
+                            
+                            // Update Firestore with the new game state
+                            await gameRef.update({
+                                players: freshGameData.players,
+                                deck: freshGameData.deck,
+                                communityCards: freshGameData.communityCards,
+                                pot: freshGameData.pot,
+                                currentBet: freshGameData.currentBet,
+                                currentPlayer: freshGameData.currentPlayer,
+                                stage: freshGameData.stage,
+                                playersActed: freshGameData.playersActed,
+                                handCount: freshGameData.handCount,
+                                smallBlind: freshGameData.smallBlind,
+                                bigBlind: freshGameData.bigBlind,
+                                lastWinner: freshGameData.lastWinner
+                            });
+                            
+                            console.log('Firestore updated with new hand data');
+                        }, 1500); // 1.5 second delay to show winner
+                    }
+                }
+                
+                function showFinalWinner(winner, loser) {
+                    const announcement = document.createElement('div');
+                    announcement.className = 'winner-announcement';
+                    announcement.innerHTML = `
+                        <h2>🏆 Game Over! 🏆</h2>
+                        <p style="font-size: 2rem; color: #f39c12; margin: 20px 0;">${winner.name} Wins!</p>
+                        <p>${loser.name} has gone bankrupt</p>
+                        <p style="margin-top: 10px; font-size: 0.9rem; color: rgba(255, 255, 255, 0.7);">
+                            Game ended at blinds ${currentGame.smallBlind}/${currentGame.bigBlind}
+                        </p>
+                        <p style="margin-top: 20px;">Final chip count: <strong>${winner.chips}</strong></p>
+                        <button class="btn btn-primary" onclick="startNewMatch()">New Game</button>
+                        <button class="btn btn-secondary" onclick="returnToLobby()">Return to Lobby</button>
+                    `;
+                    document.body.appendChild(announcement);
+                }
+                
+                window.startNewMatch = async function() {
+                    // Close the announcement
+                    const announcement = document.querySelector('.winner-announcement');
+                    if (announcement) {
+                        announcement.remove();
+                    }
+                    
+                    // Reset both players to starting chips
+                    if (currentGame && currentGame.players) {
+                        currentGame.players.forEach(player => {
+                            player.chips = 5000;
+                            player.cards = [];
+                            player.bet = 0;
+                            player.folded = false;
+                        });
+                        
+                        // Reset blinds and hand count
+                        currentGame.smallBlind = 25;
+                        currentGame.bigBlind = 50;
+                        currentGame.handCount = 0;
+                        currentGame.pot = 0;
+                        currentGame.currentBet = 0;
+                        currentGame.playersActed = [];
+                        
+                        // Clear the last winner and reset stage
+                        currentGame.lastWinner = null;
+                        currentGame.stage = 'preflop';
+                        
+                        // Create new deck
+                        currentGame.deck = createDeck();
+                        currentGame.communityCards = [];
+                        currentGame.currentPlayer = 0;
+                        
+                        // Deal cards and post blinds for the new game
+                        dealCards(currentGame);
+                        
+                        // Send new game message
+                        await sendSystemMessage(currentGame.id, '🎮 New game started! Each player has 5000 chips.');
+                        
+                        console.log('Starting new match after bankruptcy:');
+                        console.log('Player 0:', currentGame.players[0].name, 'Chips:', currentGame.players[0].chips, 'Bet:', currentGame.players[0].bet);
+                        console.log('Player 1:', currentGame.players[1].name, 'Chips:', currentGame.players[1].chips, 'Bet:', currentGame.players[1].bet);
+                        console.log('Pot:', currentGame.pot, 'Current Bet:', currentGame.currentBet);
+                        
+                        // Update the game in Firestore with all fields
+                        const gameRef = db.collection('games').doc(currentGame.id);
+                        gameRef.update({
+                            players: currentGame.players,
+                            deck: currentGame.deck,
+                            communityCards: currentGame.communityCards,
+                            pot: currentGame.pot,
+                            currentBet: currentGame.currentBet,
+                            currentPlayer: currentGame.currentPlayer,
+                            stage: currentGame.stage,
+                            playersActed: currentGame.playersActed,
+                            handCount: currentGame.handCount,
+                            smallBlind: currentGame.smallBlind,
+                            bigBlind: currentGame.bigBlind,
+                            lastWinner: currentGame.lastWinner
+                        });
+                    }
+                }
+                
+                window.returnToLobby = function() {
+                    // Close the announcement
+                    const announcement = document.querySelector('.winner-announcement');
+                    if (announcement) {
+                        announcement.remove();
+                    }
+                    
+                    // Leave the game
+                    leaveGame();
+                }
+                
+                function evaluateHoleCards(cards) {
+                    if (cards.length !== 2) return { rank: 0, name: 'Invalid' };
+                    
+                    const rank1 = getRankValue(cards[0].rank);
+                    const rank2 = getRankValue(cards[1].rank);
+                    const suited = cards[0].suit === cards[1].suit;
+                    
+                    const highRank = Math.max(rank1, rank2);
+                    const lowRank = Math.min(rank1, rank2);
+                    
+                    // Pocket pair
+                    if (rank1 === rank2) {
+                        const rankNames = { 
+                            14: 'Aces', 13: 'Kings', 12: 'Queens', 11: 'Jacks',
+                            10: 'Tens', 9: 'Nines', 8: 'Eights', 7: 'Sevens',
+                            6: 'Sixes', 5: 'Fives', 4: 'Fours', 3: 'Threes', 2: 'Twos'
+                        };
+                        const pairName = rankNames[rank1] || `${cards[0].rank}s`;
+                        return { rank: 1, name: `Pocket ${pairName}` };
+                    }
+                    
+                    // High cards
+                    const cardNames = { 14: 'Ace', 13: 'King', 12: 'Queen', 11: 'Jack', 10: 'Ten' };
+                    const highCardName = cardNames[highRank] || highRank;
+                    const lowCardName = cardNames[lowRank] || lowRank;
+                    
+                    // Special combinations
+                    if (highRank === 14 && lowRank === 13) {
+                        return { rank: 0.9, name: suited ? 'Big Slick (suited)' : 'Big Slick' };
+                    }
+                    
+                    // Connected cards
+                    const gap = highRank - lowRank;
+                    if (gap === 1) {
+                        return { rank: 0.5, name: `${highCardName}-${lowCardName} ${suited ? 'suited' : 'connectors'}` };
+                    }
+                    
+                    // Suited cards
+                    if (suited) {
+                        return { rank: 0.3, name: `${highCardName}-${lowCardName} suited` };
+                    }
+                    
+                    // Default
+                    return { rank: 0, name: `${highCardName}-${lowCardName}` };
+                }
+                
+                function evaluateHand(cards) {
+                    if (cards.length < 5) return { rank: 0, name: 'Incomplete' };
+                    
+                    // Get all possible 5-card combinations
+                    const combinations = getCombinations(cards, 5);
+                    let bestHand = { rank: -1, name: 'High Card' };
+                    
+                    // Evaluate each combination
+                    for (const combo of combinations) {
+                        const hand = evaluateFiveCards(combo);
+                        if (hand.rank > bestHand.rank) {
+                            bestHand = hand;
+                        }
+                    }
+                    
+                    return bestHand;
+                }
+                
+                function getCombinations(arr, size) {
+                    const combinations = [];
+                    
+                    function combine(start, combo) {
+                        if (combo.length === size) {
+                            combinations.push([...combo]);
+                            return;
+                        }
+                        
+                        for (let i = start; i < arr.length; i++) {
+                            combo.push(arr[i]);
+                            combine(i + 1, combo);
+                            combo.pop();
+                        }
+                    }
+                    
+                    combine(0, []);
+                    return combinations;
+                }
+                
+                function evaluateFiveCards(cards) {
+                    const ranks = cards.map(c => getRankValue(c.rank));
+                    const suits = cards.map(c => c.suit);
+                    
+                    // Sort ranks in descending order
+                    ranks.sort((a, b) => b - a);
+                    
+                    // Count occurrences
+                    const rankCounts = {};
+                    ranks.forEach(rank => {
+                        rankCounts[rank] = (rankCounts[rank] || 0) + 1;
+                    });
+                    
+                    const counts = Object.values(rankCounts).sort((a, b) => b - a);
+                    const uniqueRanks = Object.keys(rankCounts).map(Number).sort((a, b) => b - a);
+                    
+                    // Check for flush
+                    const suitCounts = {};
+                    suits.forEach(suit => {
+                        suitCounts[suit] = (suitCounts[suit] || 0) + 1;
+                    });
+                    const isFlush = Object.values(suitCounts).some(count => count === 5);
+                    
+                    // Check for straight
+                    const isStraight = checkFiveStraight(uniqueRanks);
+                    const isWheel = uniqueRanks.length === 5 && 
+                                  uniqueRanks[0] === 14 && uniqueRanks[1] === 5 && 
+                                  uniqueRanks[2] === 4 && uniqueRanks[3] === 3 && uniqueRanks[4] === 2;
+                    
+                    // Determine hand rank
+                    if ((isStraight || isWheel) && isFlush) {
+                        if (isStraight && uniqueRanks[0] === 14 && uniqueRanks[1] === 13) {
+                            return { rank: 9, name: 'Royal Flush' };
+                        }
+                        return { rank: 8, name: 'Straight Flush' };
+                    }
+                    
+                    // Get card names for better display
+                    const cardNames = { 14: 'Aces', 13: 'Kings', 12: 'Queens', 11: 'Jacks', 10: 'Tens',
+                                       9: 'Nines', 8: 'Eights', 7: 'Sevens', 6: 'Sixes', 5: 'Fives',
+                                       4: 'Fours', 3: 'Threes', 2: 'Twos' };
+                    
+                    if (counts[0] === 4) {
+                        const quadRank = parseInt(Object.keys(rankCounts).find(key => rankCounts[key] === 4));
+                        const quadName = cardNames[quadRank] || `${quadRank}s`;
+                        return { rank: 7, name: `Four ${quadName}` };
+                    }
+                    
+                    if (counts[0] === 3 && counts[1] === 2) {
+                        const tripRank = parseInt(Object.keys(rankCounts).find(key => rankCounts[key] === 3));
+                        const pairRank = parseInt(Object.keys(rankCounts).find(key => rankCounts[key] === 2));
+                        const tripName = cardNames[tripRank] || `${tripRank}s`;
+                        const pairName = cardNames[pairRank] || `${pairRank}s`;
+                        return { rank: 6, name: `Full House` };
+                    }
+                    
+                    if (isFlush) return { rank: 5, name: 'Flush' };
+                    if (isStraight || isWheel) return { rank: 4, name: 'Straight' };
+                    
+                    if (counts[0] === 3) {
+                        const tripRank = parseInt(Object.keys(rankCounts).find(key => rankCounts[key] === 3));
+                        const tripName = cardNames[tripRank] || `${tripRank}s`;
+                        return { rank: 3, name: `Three ${tripName}` };
+                    }
+                    
+                    if (counts[0] === 2 && counts[1] === 2) {
+                        return { rank: 2, name: `Two Pair` };
+                    }
+                    
+                    if (counts[0] === 2) {
+                        const pairRank = parseInt(Object.keys(rankCounts).find(key => rankCounts[key] === 2));
+                        const pairName = cardNames[pairRank] || `${pairRank}s`;
+                        return { rank: 1, name: `Pair of ${pairName}` };
+                    }
+                    
+                    // High card - include the high card value
+                    const highCard = ranks[0];
+                    const highCardNames = { 14: 'Ace', 13: 'King', 12: 'Queen', 11: 'Jack', 10: 'Ten' };
+                    const highCardName = highCardNames[highCard] || highCard;
+                    return { rank: 0, name: `${highCardName} High` };
+                }
+                
+                function checkFiveStraight(uniqueRanks) {
+                    if (uniqueRanks.length !== 5) return false;
+                    
+                    for (let i = 0; i < 4; i++) {
+                        if (uniqueRanks[i] - uniqueRanks[i + 1] !== 1) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+                
+                function getRankValue(rank) {
+                    const values = { 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
+                    return values[rank] || parseInt(rank);
+                }
+                
+                function compareHands(a, b) {
+                    if (a.rank !== b.rank) return a.rank - b.rank;
+                    if (a.highCard && b.highCard) return a.highCard - b.highCard;
+                    return 0;
+                }
+                
+                function showWinner(winner, pot, hand) {
+                    const announcement = document.createElement('div');
+                    announcement.className = 'winner-announcement';
+                    announcement.innerHTML = `
+                        <h2>🎉 Winner! 🎉</h2>
+                        <p>${winner.name} wins ${pot} chips!</p>
+                        ${hand ? `<p style="color: #f39c12; font-size: 1.3rem;">With: ${hand.name}</p>` : ''}
+                        <button class="btn btn-primary" onclick="closeWinnerAnnouncement()">Continue</button>
+                    `;
+                    document.body.appendChild(announcement);
+                }
+                
+                function closeWinnerAnnouncement() {
+                    const announcement = document.querySelector('.winner-announcement');
+                    if (announcement) {
+                        announcement.remove();
+                    }
+                }
+                
+                function resetGame(gameData) {
+                    console.log('=== RESETTING GAME FOR NEW HAND ===');
+                    console.log('Before rotation - Player 0:', gameData.players[0].name, 'Player 1:', gameData.players[1].name);
+                    
+                    // Rotate dealer position (swap players for heads-up)
+                    if (gameData.players.length === 2) {
+                        // Swap player positions to rotate dealer/blinds
+                        [gameData.players[0], gameData.players[1]] = [gameData.players[1], gameData.players[0]];
+                        console.log('After rotation - Player 0 (new SB/Dealer):', gameData.players[0].name, 'Player 1 (new BB):', gameData.players[1].name);
+                    }
+                    
+                    // Reset for next hand
+                    gameData.deck = createDeck();
+                    gameData.communityCards = [];
+                    gameData.pot = 0;
+                    gameData.currentBet = 0;
+                    gameData.currentPlayer = 0;
+                    gameData.stage = 'preflop';
+                    gameData.playersActed = [];
+                    
+                    gameData.players.forEach(player => {
+                        player.cards = [];
+                        player.bet = 0;
+                        player.folded = false;
+                    });
+                    
+                    // Only deal if no one is bankrupt
+                    const bankruptPlayer = gameData.players.find(p => p.chips === 0);
+                    if (!bankruptPlayer) {
+                        try {
+                            dealCards(gameData);
+                            console.log('New hand dealt successfully - Pot after blinds:', gameData.pot);
+                        } catch (error) {
+                            console.error('Error dealing cards:', error);
+                        }
+                    }
+                }
+                
+                window.manuallyDealNewHand = async function() {
+                    if (!currentGame || currentGame.stage !== 'showdown') return;
+                    
+                    console.log('Manually dealing new hand...');
+                    
+                    try {
+                        const gameRef = db.collection('games').doc(currentGame.id);
+                        const gameDoc = await gameRef.get();
+                        const gameData = gameDoc.data();
+                        
+                        // Reset the game state for new hand
+                        resetGame(gameData);
+                        
+                        // Send new hand message
+                        await sendSystemMessage(currentGame.id, `🎲 Starting hand #${gameData.handCount}! Blinds: ${gameData.smallBlind}/${gameData.bigBlind}`);
+                        
+                        // Update Firestore with the new game state
+                        await gameRef.update({
+                            players: gameData.players,
+                            deck: gameData.deck,
+                            communityCards: gameData.communityCards,
+                            pot: gameData.pot,
+                            currentBet: gameData.currentBet,
+                            currentPlayer: gameData.currentPlayer,
+                            stage: gameData.stage,
+                            playersActed: gameData.playersActed,
+                            handCount: gameData.handCount,
+                            smallBlind: gameData.smallBlind,
+                            bigBlind: gameData.bigBlind,
+                            lastWinner: gameData.lastWinner
+                        });
+                        
+                        console.log('
